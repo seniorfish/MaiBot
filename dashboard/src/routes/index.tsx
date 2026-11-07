@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react'
 import { Link } from '@tanstack/react-router'
 import { AlertCircle, ArrowRight, ExternalLink, Pencil, RefreshCw, Settings } from 'lucide-react'
 import { motion, useReducedMotion } from 'motion/react'
-import { createContext, lazy, memo, Suspense, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, memo, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
@@ -47,7 +47,6 @@ import { useNewsReadState } from './home/hooks/useNewsReadState'
 import { NewsStrip } from './home/NewsStrip'
 import { usePluginHomeCards } from './home/hooks/usePluginHomeCards'
 import { useQuickShortcuts } from './home/hooks/useQuickShortcuts'
-import { useReviewStats } from './home/hooks/useReviewStats'
 import {
   CostTrendCard,
   DailyStatisticsCard,
@@ -59,12 +58,6 @@ import {
   TokenTrendCard,
 } from './home/StatisticsCards'
 import type { BotStatus, TimeSeriesData } from './home/types'
-
-const ExpressionReviewer = lazy(() =>
-  import('@/components/expression-reviewer').then((module) => ({
-    default: module.ExpressionReviewer,
-  }))
-)
 
 const BotRuntimeContext = createContext<{ botStatus: BotStatus | null; isBotStatusLoading: boolean }>({
   botStatus: null,
@@ -376,7 +369,6 @@ const IndexPageContent = memo(function IndexPageContent({ botVersion }: { botVer
   } = useDashboardData()
   const { featureStatus, fetchFeatureStatus } = useFeatureStatus()
   const { localCacheStats, isLocalCacheStatsLoading, fetchLocalCacheStats } = useLocalCacheMetrics()
-  const { uncheckedCount, fetchReviewStats } = useReviewStats()
   const {
     hitokoto,
     hitokotoLoading,
@@ -394,15 +386,12 @@ const IndexPageContent = memo(function IndexPageContent({ botVersion }: { botVer
     setSelectedNews(item)
   }
 
-  const [isReviewerOpen, setIsReviewerOpen] = useState(false)
   const [hitokotoEditorOpen, setHitokotoEditorOpen] = useState(false)
   const [storageDisplayMode, setStorageDisplayMode] = useState<'size' | 'count'>('size')
 
   const handleRestart = useCallback(async () => {
     await triggerRestart()
   }, [triggerRestart])
-
-  const openReviewer = useCallback(() => setIsReviewerOpen(true), [])
 
   const {
     quickShortcutIds,
@@ -418,8 +407,6 @@ const IndexPageContent = memo(function IndexPageContent({ botVersion }: { botVer
   } = useQuickShortcuts({
     isRestarting,
     handleRestart,
-    uncheckedCount,
-    onOpenReviewer: openReviewer,
   })
 
   // 初始加载各数据源
@@ -429,14 +416,12 @@ const IndexPageContent = memo(function IndexPageContent({ botVersion }: { botVer
     fetchHitokoto()
     fetchFeatureStatus()
     fetchLocalCacheStats()
-    fetchReviewStats()
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [
     fetchDashboardData,
     fetchHitokoto,
     fetchFeatureStatus,
     fetchLocalCacheStats,
-    fetchReviewStats,
   ])
 
   if (dashboardError && !dashboardData) {
@@ -1119,21 +1104,6 @@ const IndexPageContent = memo(function IndexPageContent({ botVersion }: { botVer
         {/* 重启遮罩层 */}
         <RestartOverlay />
 
-        {/* 表达方式审核器 */}
-        {isReviewerOpen && (
-          <Suspense fallback={null}>
-            <ExpressionReviewer
-              open
-              onOpenChange={(open) => {
-                setIsReviewerOpen(open)
-                if (!open) {
-                  // 关闭审核器时刷新统计
-                  fetchReviewStats()
-                }
-              }}
-            />
-          </Suspense>
-        )}
       </div>
     </ScrollArea>
   )

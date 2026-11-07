@@ -8,7 +8,7 @@ import type { LucideIcon } from 'lucide-react'
 import { useAnimation } from '@/hooks/use-animation'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { cn } from '@/lib/utils'
-import { StageStatusLabel } from '@/routes/monitor/StageStatusLabel'
+import { StageStatusLabel, formatAgentStatusText } from '@/routes/monitor/StageStatusLabel'
 import { useMaisakaMonitorOverview } from '@/routes/monitor/use-maisaka-monitor'
 import type { StageStatusInfo } from '@/routes/monitor/use-maisaka-monitor'
 import { MOBILE_GLASS_CLASS } from './mobile-glass'
@@ -203,7 +203,7 @@ function TabBarDock({ onSearch }: Pick<MobileTabBarProps, 'onSearch'>) {
           {liveSessionName} · <StageStatusLabel status={latestStatus} />
         </span>
         {!collapsed && latestStatus.detail && (
-          <span className="text-muted-foreground truncate text-xs">{latestStatus.detail}</span>
+          <span className="text-muted-foreground truncate text-xs">{formatAgentStatusText(latestStatus.detail)}</span>
         )}
       </motion.span>
       {!collapsed && (

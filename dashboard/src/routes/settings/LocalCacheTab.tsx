@@ -435,7 +435,7 @@ function DatabaseManagementPanel({
               <AlertDialogHeader>
                 <AlertDialogTitle>选择数据库清理范围</AlertDialogTitle>
                 <AlertDialogDescription>
-                  默认不会勾选任何表。资源类表只展示不开放通用清理，避免误删表达、黑话、人物和会话数据。
+                  默认不会勾选任何表。资源类表只展示不开放通用清理，避免误删黑话、人物和会话数据。
                 </AlertDialogDescription>
               </AlertDialogHeader>
 

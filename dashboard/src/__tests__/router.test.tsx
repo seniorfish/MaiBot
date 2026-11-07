@@ -47,7 +47,6 @@ vi.mock('@/routes/config/bot', () => ({ BotConfigPage: StubPage }))
 vi.mock('@/routes/config/model', () => ({ ModelConfigPage: StubPage }))
 vi.mock('@/routes/config/prompts', () => ({ PromptManagementPage: StubPage }))
 vi.mock('@/routes/resource/learning', () => ({ LearningPage: StubPage }))
-vi.mock('@/routes/resource/expression/index.tsx', () => ({ ExpressionManagementPage: StubPage }))
 vi.mock('@/routes/person', () => ({ PersonManagementPage: StubPage }))
 vi.mock('@/routes/resource/jargon/index.tsx', () => ({ JargonManagementPage: StubPage }))
 vi.mock('@/routes/resource/knowledge-graph/index.tsx', () => ({ KnowledgeGraphPage: StubPage }))
@@ -86,7 +85,6 @@ const expectedPaths = [
   '/config/prompts',
   '/resource/emoji',
   '/resource/learning',
-  '/resource/expression',
   '/resource/jargon',
   '/resource/person',
   '/resource/knowledge-graph',
@@ -193,8 +191,7 @@ describe('router 路由表', () => {
           '/settings',
           '/extensions',
           '/resource/emoji',
-          '/resource/expression',
-          '/resource/jargon',
+                  '/resource/jargon',
         ].includes(path)
     )) {
       const route = routesByPath[path]
@@ -354,8 +351,7 @@ describe('router 路由表', () => {
           '/settings',
           '/extensions',
           '/resource/emoji',
-          '/resource/expression',
-          '/resource/jargon',
+                  '/resource/jargon',
         ].includes(path)
     )) {
       const component = routesByPath[path]?.options.component as LazyRouteComponent | undefined

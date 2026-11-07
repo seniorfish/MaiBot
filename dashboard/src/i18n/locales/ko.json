@@ -74,7 +74,6 @@
       "promptManagement": "Prompt 관리",
       "emojiManagement": "이모티콘 관리",
       "learning": "학습",
-      "expressionManagement": "표현 관리",
       "slangManagement": "슬랭 관리",
       "personInfo": "인물 정보",
       "knowledgeGraph": "장기 기억 그래프",
@@ -811,7 +810,7 @@
       },
       "modelSetup": {
         "title": "모델 설정",
-        "description": "planner와 replyer 모델을 설정합니다"
+        "description": "Agent 결정 및 응답 모델을 설정합니다"
       }
     },
     "loading": {
@@ -833,8 +832,8 @@
       "enterProviderName": "API 제공자 이름을 입력해 주세요",
       "enterBaseUrl": "API Base URL을 입력해 주세요",
       "enterApiKey": "API Key를 입력해 주세요",
-      "enterPlannerModelIdentifier": "planner 모델 식별자를 입력해 주세요",
-      "enterReplyerModelIdentifier": "replyer 모델 식별자를 입력해 주세요",
+      "enterPlannerModelIdentifier": "Agent 결정 모델 식별자를 입력해 주세요",
+      "enterReplyerModelIdentifier": "Agent 응답 모델 식별자를 입력해 주세요",
       "customTokenInvalid": "Token이 요구 사항을 충족하지 않습니다: {{failedRules}}"
     },
     "toast": {
@@ -1027,7 +1026,7 @@
       "modelSetup": {
         "planner": {
           "identifier": {
-            "label": "planner 모델 식별자 *",
+            "label": "Agent 결정 모델 식별자 *",
             "description": "API 서비스가 제공하는 실제 모델 ID입니다. 모델 이름은 이 식별자로 초기화됩니다"
           },
           "visual": {
@@ -1036,7 +1035,7 @@
         },
         "replyer": {
           "identifier": {
-            "label": "replyer 모델 식별자 *",
+            "label": "Agent 응답 모델 식별자 *",
             "description": "API 서비스가 제공하는 실제 모델 ID입니다. 모델 이름은 이 식별자로 초기화됩니다"
           },
           "visual": {
@@ -1168,9 +1167,7 @@
       "model": "모델 설정",
       "modelDesc": "모델 매개변수 구성",
       "emoji": "이모티콘 관리",
-      "expression": "표현 관리",
-      "learningDesc": "학습한 표현, 슬랭 및 이모티콘 관리",
-      "expressionDesc": "속 표현 관리",
+      "learningDesc": "학습한 슬랭 및 이모티콘 관리",
       "person": "인물 정보",
       "personDesc": "인물 정보 관리",
       "jargon": "슬랭 관리",
@@ -1495,12 +1492,11 @@
       "title": "빠른 작업",
       "restart": "MaiBot 재시작",
       "restarting": "재시작 중...",
-      "expressionReview": "표현 검토",
       "viewLogs": "로그 보기",
       "chat": "마이봇과 채팅",
       "docs": "문서 보기",
-      "replyerLogs": "응답 로그",
-      "plannerLogs": "계획 로그",
+      "replyerLogs": "Agent 응답 로그",
+      "plannerLogs": "Agent 결정 로그",
       "reasoningLogs": "추론 로그",
       "pluginManage": "플러그인 관리",
       "systemSettings": "WebUI 설정",
@@ -1512,19 +1508,17 @@
       "modelTasks": "모델 기능 할당",
       "botConfig": "코어 설정",
       "emojiManagement": "이모지 관리",
-      "expressionManagement": "표현 관리",
       "statistics": "상세 통계 데이터",
       "customize": "사용자 지정",
       "empty": "선택한 빠른 바로가기가 없습니다",
       "add": "바로가기 추가",
       "descriptions": {
         "restart": "MaiBot 코어 프로세스 재시작",
-        "expressionReview": "표현 학습 검토 대화상자 열기",
         "viewLogs": "WebUI 로그 보기",
         "chat": "마이봇 채팅 열기",
         "docs": "마이봇 문서 열기",
-        "replyerLogs": "응답 단계 기록 보기",
-        "plannerLogs": "계획 단계 기록 보기",
+        "replyerLogs": "Agent 응답 단계 기록 보기",
+        "plannerLogs": "Agent 결정 단계 기록 보기",
         "reasoningLogs": "추론 로그 열기",
         "configSection": "봇 설정 / {{section}} 열기",
         "pluginManage": "플러그인 마켓과 관리 페이지 열기",
@@ -1537,7 +1531,6 @@
         "modelTasks": "모델 관리 / 기능 할당 열기",
         "botConfig": "MaiBot 코어 설정 열기",
         "emojiManagement": "이모지 리소스 관리 열기",
-        "expressionManagement": "표현 관리 열기",
         "statistics": "maibot_statistics.html 열기"
       },
       "categories": {

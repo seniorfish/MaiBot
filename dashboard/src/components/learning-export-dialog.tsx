@@ -34,7 +34,6 @@ export interface LearningExportOptions {
 }
 
 interface LearningExportDialogProps {
-  kind: 'expression' | 'jargon'
   selectedIds: Set<number>
   chats: { id: string; name: string; targetId?: string | null }[]
   groups: { id: number; name: string; chatIds: string[]; isGlobal: boolean; details: string }[]
@@ -45,9 +44,8 @@ interface LearningExportDialogProps {
   onExport: (options: LearningExportOptions) => Promise<{ count: number }>
 }
 
-/** 表达与黑话共用导出卡片，范围独立于列表的搜索、分页和筛选。 */
+/** 黑话导出卡片，范围独立于列表的搜索、分页和筛选。 */
 export function LearningExportDialog({
-  kind,
   selectedIds,
   chats,
   groups,
@@ -57,7 +55,7 @@ export function LearningExportDialog({
   onBack,
   onExport,
 }: LearningExportDialogProps) {
-  const name = kind === 'expression' ? '表达方式' : '黑话'
+  const name = '黑话'
   const [scope, setScope] = useState<ExportScope>(selectedIds.size > 0 ? 'selected' : 'all')
   const [chatId, setChatId] = useState('')
   const [groupId, setGroupId] = useState('')
@@ -108,7 +106,7 @@ export function LearningExportDialog({
         includeChatInfo,
       })
       const suffix = scope === 'chat' ? chat!.name : scope === 'group' ? group!.name : scope
-      const filename = `${kind === 'expression' ? 'expressions' : 'jargons'}-${suffix.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60)}.json`
+      const filename = `jargons-${suffix.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60)}.json`
       const url = URL.createObjectURL(
         new Blob([JSON.stringify(result, null, 2)], { type: 'application/json;charset=utf-8' })
       )
@@ -264,12 +262,10 @@ export function LearningExportDialog({
                   )}
               </div>
             )}
-            {kind === 'jargon' && (
-              <Label className="flex cursor-pointer items-center justify-between gap-3 rounded-md border p-3">
-                包含聊天目标信息
-                <Switch checked={includeChatInfo} onCheckedChange={setIncludeChatInfo} />
-              </Label>
-            )}
+            <Label className="flex cursor-pointer items-center justify-between gap-3 rounded-md border p-3">
+              包含聊天目标信息
+              <Switch checked={includeChatInfo} onCheckedChange={setIncludeChatInfo} />
+            </Label>
           </fieldset>
         </DialogBody>
         <DialogFooter>

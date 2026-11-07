@@ -582,7 +582,7 @@ describe('ReasoningProcessPage 类型列表', () => {
     expect(screen.getByText('学习器')).toBeInTheDocument()
     expect(screen.getByText('其余')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^planner\b/ })).toBeInTheDocument()
-    expect(screen.getByText('规划器')).toBeInTheDocument()
+    expect(screen.getByText('Agent 决策')).toBeInTheDocument()
     expect(screen.getByText(/2 个会话/)).toBeInTheDocument()
     expect(screen.getByText('表达学习')).toBeInTheDocument()
     expect(screen.getByText('表情包发送')).toBeInTheDocument()
@@ -641,7 +641,7 @@ describe('ReasoningProcessPage 类型列表', () => {
 })
 
 describe('ReasoningProcessPage 浏览筛选与分页', () => {
-  it('进入阶段后渲染记录元数据、行为点与回复器预览', async () => {
+  it('进入阶段后渲染记录元数据、行为点与 Agent 回复预览', async () => {
     const user = userEvent.setup()
     renderPage()
     await enterStage(user, 'planner')
@@ -766,14 +766,14 @@ describe('ReasoningProcessPage 浏览筛选与分页', () => {
     renderPage()
     await enterStage(user, 'planner')
     await selectRecord('晚饭计划')
-    expect(screen.getAllByText(/规划器\/测试群\/晚饭计划/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Agent 决策\/测试群\/晚饭计划/).length).toBeGreaterThan(0)
 
     const callsBefore = vi.mocked(reasoningApi.listReasoningPromptFiles).mock.calls.length
     await user.click(screen.getByRole('button', { name: '刷新' }))
     await waitFor(() => {
       expect(vi.mocked(reasoningApi.listReasoningPromptFiles).mock.calls.length).toBeGreaterThan(callsBefore)
     })
-    expect(screen.getAllByText(/规划器\/测试群\/晚饭计划/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Agent 决策\/测试群\/晚饭计划/).length).toBeGreaterThan(0)
   })
 
   it('筛选掉当前记录后取消选中', async () => {
@@ -812,7 +812,7 @@ describe('ReasoningProcessPage 复制导出与预览', () => {
     })
     expect(toastMock).toHaveBeenCalledWith({
       title: '已复制完整 Prompt',
-      description: expect.stringContaining('规划器/测试群/晚饭计划'),
+      description: expect.stringContaining('Agent 决策/测试群/晚饭计划'),
     })
   })
 
@@ -1020,7 +1020,7 @@ describe('ReasoningProcessPage 清空类型', () => {
     renderPage()
     await screen.findByText('主流程')
 
-    await user.click(screen.getByRole('button', { name: '清空规划器' }))
+    await user.click(screen.getByRole('button', { name: '清空Agent 决策' }))
     expect(screen.getByText('清空推理过程记录')).toBeInTheDocument()
     expect(screen.getByText(/当前包含 2 个会话/)).toBeInTheDocument()
 
@@ -1030,14 +1030,14 @@ describe('ReasoningProcessPage 清空类型', () => {
     })
     expect(reasoningApi.clearReasoningPromptStage).not.toHaveBeenCalled()
 
-    await user.click(screen.getByRole('button', { name: '清空规划器' }))
+    await user.click(screen.getByRole('button', { name: '清空Agent 决策' }))
     await user.click(screen.getByRole('button', { name: '确认清空' }))
     await waitFor(() => {
       expect(reasoningApi.clearReasoningPromptStage).toHaveBeenCalledWith('planner')
     })
     expect(toastMock).toHaveBeenCalledWith({
       title: '已清空推理过程',
-      description: '规划器：删除 4 个文件',
+      description: 'Agent 决策：删除 4 个文件',
     })
   })
 
@@ -1049,7 +1049,7 @@ describe('ReasoningProcessPage 清空类型', () => {
     await user.click(screen.getByRole('button', { name: '类型' }))
     await screen.findByText('主流程')
 
-    await user.click(screen.getByRole('button', { name: '清空规划器' }))
+    await user.click(screen.getByRole('button', { name: '清空Agent 决策' }))
     await user.click(screen.getByRole('button', { name: '确认清空' }))
     await waitFor(() => {
       expect(reasoningApi.clearReasoningPromptStage).toHaveBeenCalledWith('planner')
@@ -1059,7 +1059,7 @@ describe('ReasoningProcessPage 清空类型', () => {
     })
 
     vi.mocked(reasoningApi.clearReasoningPromptStage).mockRejectedValueOnce(new Error('磁盘只读'))
-    await user.click(await screen.findByRole('button', { name: '清空回复器' }))
+    await user.click(await screen.findByRole('button', { name: '清空Agent 回复' }))
     await user.click(screen.getByRole('button', { name: '确认清空' }))
     await waitFor(() => {
       expect(toastMock).toHaveBeenCalledWith({
@@ -1093,7 +1093,7 @@ describe('ReasoningProcessPage 清空类型', () => {
     const user = userEvent.setup()
     renderPage()
     await screen.findByText('主流程')
-    await user.click(screen.getByRole('button', { name: '清空规划器' }))
+    await user.click(screen.getByRole('button', { name: '清空Agent 决策' }))
     await user.click(screen.getByRole('button', { name: '确认清空' }))
 
     expect(screen.getByRole('button', { name: /确认清空/ })).toBeDisabled()
@@ -1195,7 +1195,7 @@ describe('ReasoningProcessPage 深链与嵌入', () => {
       session: 'sess-1',
       targetStem: 'stem-dinner',
     })
-    expect((await screen.findAllByText(/规划器\/测试群\/晚饭计划/)).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText(/Agent 决策\/测试群\/晚饭计划/)).length).toBeGreaterThan(0)
     await waitFor(() => {
       expect(lastFilesQuery()).toMatchObject({ targetStem: '' })
     })
@@ -1218,7 +1218,7 @@ describe('ReasoningProcessPage 深链与嵌入', () => {
     )
     renderPage()
     expect(
-      (await screen.findAllByText('规划器/其他群/回退记录/qq/群聊/10001')).length
+      (await screen.findAllByText('Agent 决策/其他群/回退记录/qq/群聊/10001')).length
     ).toBeGreaterThan(0)
   })
 

@@ -74,8 +74,6 @@ import {
   FocusGroupsHook,
   ChatPromptsHook,
   ChatTalkValueRulesHook,
-  ExpressionGroupsHook,
-  ExpressionLearningListHook,
   LearningBlacklistHook,
   FocusWhitelistHook,
   JargonGroupsHook,
@@ -365,9 +363,6 @@ function BotConfigPageContent() {
       ['chat.reply_timing.private_reply_pause_rules', PrivateReplyPauseRulesHook],
       ['experimental.focus_chat_whitelist', FocusWhitelistHook],
       ['experimental.focus_groups', FocusGroupsHook],
-      ['expression.expression_groups', ExpressionGroupsHook],
-      ['expression.learning_list', ExpressionLearningListHook],
-      ['expression.learning_blacklist', LearningBlacklistHook],
       ['jargon.learning_blacklist', LearningBlacklistHook],
       ['jargon.jargon_groups', JargonGroupsHook],
       ['jargon.learning_list', JargonLearningListHook],
@@ -1219,7 +1214,7 @@ function DynamicConfigTabs(props: DynamicConfigTabsProps) {
     personality: (
       <GlobalLearningSettings
         values={sectionValues}
-        sections={(['expression', 'jargon'] as const).filter((section) => configSchema.nested?.[section])}
+        sections={configSchema.nested?.jargon ? (['jargon'] as const) : []}
         onChange={(section, rules) => updateSectionValueByPath(section, ['learning_list'], rules)}
       />
     ),

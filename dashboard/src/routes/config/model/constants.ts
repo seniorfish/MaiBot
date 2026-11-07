@@ -20,13 +20,13 @@ export const modelListCache = new Map<string, { models: ModelListItem[]; timesta
 export const TASK_CONFIGS = [
   {
     key: 'replyer' as const,
-    title: '回复模型 (replyer)',
-    description: '用于表达器和表达方式学习',
+    title: 'Agent 回复模型',
+    description: '用于生成回复',
   },
   {
     key: 'planner' as const,
-    title: '规划模型 (planner)',
-    description: '负责决定麦麦该什么时候回复',
+    title: 'Agent 决策模型',
+    description: '负责决定麦麦该何时回复与调用工具',
   },
   {
     key: 'memory' as const,
@@ -35,13 +35,13 @@ export const TASK_CONFIGS = [
   },
   {
     key: 'learner' as const,
-    title: '表达学习 (learner)',
-    description: '用于表达方式和黑话学习',
+    title: '学习模型 (learner)',
+    description: '用于黑话学习',
   },
   {
     key: 'fast_model' as const,
     title: '快速模型 (fast_model)',
-    description: '用于表达方式选择、回复断句等快速任务',
+    description: '用于回复断句等快速任务',
   },
   {
     key: 'emoji' as const,

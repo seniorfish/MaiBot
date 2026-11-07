@@ -67,12 +67,11 @@ const privateChat = makeChat(2, {
   group_name: null,
 })
 
-/** Bot 配置：表达组含一个在册目标与一个找不到聊天流的目标；记忆开启全局共享。 */
+/** Bot 配置：黑话组含一个在册目标与一个找不到聊天流的目标；记忆开启全局共享。 */
 function makeBotConfig(): Record<string, unknown> {
   return {
-    expression: {
-      enabled: true,
-      expression_groups: [
+    jargon: {
+      jargon_groups: [
         {
           targets: [
             { platform: 'qq', item_id: '10001', rule_type: 'group' },
@@ -81,7 +80,6 @@ function makeBotConfig(): Record<string, unknown> {
         },
       ],
     },
-    jargon: { jargon_groups: [] },
     a_memorix: { global_memory_sharing_enabled: true, shared_memory_groups: [] },
   }
 }
@@ -121,16 +119,15 @@ describe('ChatManagementPage 共享组管理', () => {
     expect(screen.getByText('未找到聊天流')).toBeInTheDocument()
   })
 
-  it('新建共享组：保留原组并追加空组写回表达配置', async () => {
+  it('新建共享组：保留原组并追加空组写回黑话配置', async () => {
     const user = userEvent.setup()
     await renderGroupsView()
     await screen.findByText('共享组 1')
 
     await user.click(screen.getByRole('button', { name: '新建共享组' }))
     await waitFor(() =>
-      expect(configApi.updateBotConfigSection).toHaveBeenCalledWith('expression', {
-        enabled: true,
-        expression_groups: [
+      expect(configApi.updateBotConfigSection).toHaveBeenCalledWith('jargon', {
+        jargon_groups: [
           {
             targets: [
               { platform: 'qq', item_id: '10001', rule_type: 'group' },
@@ -144,7 +141,7 @@ describe('ChatManagementPage 共享组管理', () => {
     await waitFor(() =>
       expect(toastMock).toHaveBeenCalledWith({
         title: '共享组已保存',
-        description: '表达共享组配置已更新。',
+        description: '黑话共享组配置已更新。',
       })
     )
   })
@@ -157,9 +154,9 @@ describe('ChatManagementPage 共享组管理', () => {
     await user.click(screen.getByRole('button', { name: '移除 测试群 · 账号 123' }))
     await waitFor(() =>
       expect(configApi.updateBotConfigSection).toHaveBeenCalledWith(
-        'expression',
+        'jargon',
         expect.objectContaining({
-          expression_groups: [
+          jargon_groups: [
             { targets: [{ platform: 'qq', item_id: '99999', rule_type: 'private' }] },
           ],
         })
@@ -169,8 +166,8 @@ describe('ChatManagementPage 共享组管理', () => {
     await user.click(screen.getByRole('button', { name: '删除共享组 1' }))
     await waitFor(() =>
       expect(configApi.updateBotConfigSection).toHaveBeenCalledWith(
-        'expression',
-        expect.objectContaining({ expression_groups: [] })
+        'jargon',
+        expect.objectContaining({ jargon_groups: [] })
       )
     )
   })
@@ -195,9 +192,8 @@ describe('ChatManagementPage 共享组管理', () => {
     await user.click(within(dialog).getByRole('button', { name: '加入 1 个聊天' }))
 
     await waitFor(() =>
-      expect(configApi.updateBotConfigSection).toHaveBeenCalledWith('expression', {
-        enabled: true,
-        expression_groups: [
+      expect(configApi.updateBotConfigSection).toHaveBeenCalledWith('jargon', {
+        jargon_groups: [
           {
             targets: [
               { platform: 'qq', item_id: '10001', rule_type: 'group' },
@@ -229,7 +225,7 @@ describe('ChatManagementPage 共享组管理', () => {
   it('URL kind=jargon 时初始进入黑话共享组视图', async () => {
     await renderGroupsView('?kind=jargon')
 
-    expect(await screen.findByText('暂无黑话共享组。')).toBeInTheDocument()
+    expect(await screen.findByText('共享组 1')).toBeInTheDocument()
   })
 
   it('共享组配置加载失败时显示错误提示', async () => {
@@ -271,9 +267,8 @@ describe('ChatManagementPage 共享组批量与边界', () => {
     await user.click(within(dialog).getByRole('button', { name: '加入 2 个聊天' }))
 
     await waitFor(() =>
-      expect(configApi.updateBotConfigSection).toHaveBeenCalledWith('expression', {
-        enabled: true,
-        expression_groups: [
+      expect(configApi.updateBotConfigSection).toHaveBeenCalledWith('jargon', {
+        jargon_groups: [
           {
             targets: [
               { platform: 'qq', item_id: '10001', rule_type: 'group' },
@@ -287,12 +282,11 @@ describe('ChatManagementPage 共享组批量与边界', () => {
     )
   })
 
-  it('取消添加、空组、黑话新建、记忆可编辑与保存失败', async () => {
+  it('取消添加、空组、新建黑话组、记忆可编辑与保存失败', async () => {
     const user = userEvent.setup()
     vi.mocked(configApi.getBotConfig).mockResolvedValue({
-      expression: {
-        enabled: true,
-        expression_groups: [
+      jargon: {
+        jargon_groups: [
           { targets: [] },
           {
             targets: [
@@ -303,12 +297,11 @@ describe('ChatManagementPage 共享组批量与边界', () => {
           },
         ],
       },
-      jargon: { jargon_groups: 'not-array' },
       a_memorix: {
         global_memory_sharing_enabled: false,
         shared_memory_groups: [
           {
-            expression_groups: [{ platform: 'telegram', item_id: '20002', rule_type: 'private' }],
+            targets: [{ platform: 'telegram', item_id: '20002', rule_type: 'private' }],
           },
         ],
       },
@@ -322,13 +315,11 @@ describe('ChatManagementPage 共享组批量与边界', () => {
     await user.click(within(dialog).getByRole('button', { name: '取消' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
 
-    await user.click(screen.getByRole('button', { name: '黑话' }))
-    expect(await screen.findByText('暂无黑话共享组。')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '新建共享组' }))
     await waitFor(() =>
       expect(configApi.updateBotConfigSection).toHaveBeenCalledWith(
         'jargon',
-        expect.objectContaining({ jargon_groups: [{ targets: [] }] })
+        expect.objectContaining({ jargon_groups: expect.arrayContaining([{ targets: [] }]) })
       )
     )
 

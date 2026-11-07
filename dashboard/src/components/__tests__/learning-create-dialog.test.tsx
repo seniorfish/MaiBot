@@ -3,13 +3,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { LearningCreateDialog } from '../learning-create-dialog'
-import { getExpressionChatTargets } from '@/lib/expression-api'
 import { getJargonChatList } from '@/lib/jargon-api'
 import * as learning from '@/lib/text-learning-api'
-import type { ChatInfo } from '@/types/expression'
 import type { JargonChatInfo } from '@/types/jargon'
 
-vi.mock('@/lib/expression-api', () => ({ getExpressionChatTargets: vi.fn() }))
 vi.mock('@/lib/jargon-api', () => ({ getJargonChatList: vi.fn() }))
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }))
 vi.mock('@/lib/text-learning-api', async (original) => ({
@@ -24,9 +21,6 @@ const second = { title: '赞同', description: '确实如此', evidence: '确实
 const third = { title: '安慰', description: '慢慢来', evidence: '慢慢来' }
 
 beforeEach(() => {
-  vi.mocked(getExpressionChatTargets).mockResolvedValue([
-    { chat_id: 'chat1', chat_name: '测试群', account_id: '123' } as ChatInfo,
-  ])
   vi.mocked(getJargonChatList).mockResolvedValue({
     success: true,
     data: [{ session_id: 'chat1', chat_name: '测试群', account_id: '123' } as JargonChatInfo],
@@ -42,7 +36,7 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-function show(kind: learning.LearningKind = 'expression') {
+function show(kind: learning.LearningKind = 'jargon') {
   const manual = vi.fn()
   const success = vi.fn()
   render(
@@ -76,7 +70,8 @@ describe('LearningCreateDialog', () => {
     expect(learning.prepareLearningText).not.toHaveBeenCalled()
   })
 
-  it.each(['expression', 'jargon'] as const)('分段学习 %s 后只导入勾选候选', async (kind) => {
+  it('分段学习黑话后只导入勾选候选', async () => {
+    const kind = 'jargon' as const
     vi.mocked(learning.extractTextCandidates)
       .mockResolvedValueOnce([first])
       .mockResolvedValueOnce([first, second])
@@ -90,7 +85,6 @@ describe('LearningCreateDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: '导入所选（1）' }))
     await waitFor(() =>
       expect(learning.importLearningCandidates).toHaveBeenCalledWith(
-        kind,
         ['chat1'],
         [first],
         false
@@ -124,7 +118,6 @@ describe('LearningCreateDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: '导入所选（2）' }))
     await waitFor(() =>
       expect(learning.importLearningCandidates).toHaveBeenCalledWith(
-        'expression',
         ['chat1'],
         [first, second],
         false
@@ -133,17 +126,16 @@ describe('LearningCreateDialog', () => {
     await screen.findByRole('button', { name: '导入所选（0）' })
     fireEvent.click(screen.getByRole('button', { name: '重试第 2 段' }))
     await screen.findByText('学习完成')
-    expect(learning.extractTextCandidates).toHaveBeenNthCalledWith(1, 'expression', '文段一')
-    expect(learning.extractTextCandidates).toHaveBeenNthCalledWith(2, 'expression', '文段二')
-    expect(learning.extractTextCandidates).toHaveBeenNthCalledWith(3, 'expression', '文段三')
-    expect(learning.extractTextCandidates).toHaveBeenNthCalledWith(4, 'expression', '文段二')
+    expect(learning.extractTextCandidates).toHaveBeenNthCalledWith(1, '文段一')
+    expect(learning.extractTextCandidates).toHaveBeenNthCalledWith(2, '文段二')
+    expect(learning.extractTextCandidates).toHaveBeenNthCalledWith(3, '文段三')
+    expect(learning.extractTextCandidates).toHaveBeenNthCalledWith(4, '文段二')
     expect(screen.queryByText('失败段落（1）')).not.toBeInTheDocument()
     expect(screen.getByText('已选 1 / 1 条')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '导入所选（1）' }))
     await waitFor(() =>
       expect(learning.importLearningCandidates).toHaveBeenNthCalledWith(
         2,
-        'expression',
         ['chat1'],
         [third],
         false
@@ -175,8 +167,8 @@ describe('LearningCreateDialog', () => {
     await screen.findByText('第一段仍失败')
     await waitFor(() => expect(screen.getByText('失败段落（1）')).toBeInTheDocument())
     expect(learning.extractTextCandidates).toHaveBeenCalledTimes(6)
-    expect(learning.extractTextCandidates).toHaveBeenNthCalledWith(5, 'expression', '文段一')
-    expect(learning.extractTextCandidates).toHaveBeenNthCalledWith(6, 'expression', '文段三')
+    expect(learning.extractTextCandidates).toHaveBeenNthCalledWith(5, '文段一')
+    expect(learning.extractTextCandidates).toHaveBeenNthCalledWith(6, '文段三')
     expect(screen.getByText('已选 3 / 3 条')).toBeInTheDocument()
     expect(screen.getByText('4 / 4 段')).toBeInTheDocument()
   })
@@ -197,7 +189,6 @@ describe('LearningCreateDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: '导入所选（1）' }))
     await waitFor(() =>
       expect(learning.importLearningCandidates).toHaveBeenCalledWith(
-        'expression',
         ['chat1'],
         [first],
         false
@@ -210,7 +201,6 @@ describe('LearningCreateDialog', () => {
     await waitFor(() =>
       expect(learning.importLearningCandidates).toHaveBeenNthCalledWith(
         2,
-        'expression',
         ['chat1'],
         [second],
         false
@@ -264,10 +254,8 @@ describe('LearningCreateDialog', () => {
     expect(learning.extractTextCandidates).toHaveBeenCalledTimes(2)
   })
 
-  it.each(['expression', 'jargon'] as const)(
-    '%s 无原文依据也能编辑后导入全局，无需可用聊天',
-    async (kind) => {
-      vi.mocked(getExpressionChatTargets).mockResolvedValue([])
+  it('黑话无原文依据也能编辑后导入全局，无需可用聊天', async () => {
+      const kind = 'jargon' as const
       vi.mocked(getJargonChatList).mockResolvedValue({ success: true, data: [] })
       vi.mocked(learning.prepareLearningText).mockResolvedValue(['原文'])
       vi.mocked(learning.extractTextCandidates).mockResolvedValue([
@@ -279,10 +267,10 @@ describe('LearningCreateDialog', () => {
       expect(screen.getByText('未提供原文依据，可确认后导入')).toBeInTheDocument()
       fireEvent.click(screen.getByRole('button', { name: '全局（所有聊天）' }))
       expect(screen.getByRole('button', { name: '导入所选（1）' })).toBeEnabled()
-      const noun = kind === 'expression' ? '表达方式' : '黑话'
+      const noun = '黑话'
       fireEvent.click(screen.getByRole('button', { name: `编辑第 1 条${noun}` }))
-      const titleLabel = kind === 'expression' ? '情境' : '黑话'
-      const descriptionLabel = kind === 'expression' ? '表达方式' : '含义'
+      const titleLabel = '黑话'
+      const descriptionLabel = '含义'
       fireEvent.change(screen.getByLabelText(`第 1 条${titleLabel}`), {
         target: { value: '编辑后的内容' },
       })
@@ -293,15 +281,13 @@ describe('LearningCreateDialog', () => {
       fireEvent.click(screen.getByRole('button', { name: '导入所选（1）' }))
       await waitFor(() =>
         expect(learning.importLearningCandidates).toHaveBeenCalledWith(
-          kind,
           [],
           [{ title: '编辑后的内容', description: '编辑后的含义' }],
           true
         )
       )
       expect(success).toHaveBeenCalledWith(true)
-    }
-  )
+  })
 
   it('编辑为空时阻止导入，补全后无需填写原文即可导入', async () => {
     vi.mocked(learning.prepareLearningText).mockResolvedValue(['原文'])
@@ -309,17 +295,16 @@ describe('LearningCreateDialog', () => {
     show()
     await start()
     await screen.findByText('学习完成')
-    fireEvent.click(screen.getByRole('button', { name: '编辑第 1 条表达方式' }))
-    fireEvent.change(screen.getByLabelText('第 1 条情境'), { target: { value: ' ' } })
+    fireEvent.click(screen.getByRole('button', { name: '编辑第 1 条黑话' }))
+    fireEvent.change(screen.getByLabelText('第 1 条黑话'), { target: { value: ' ' } })
     expect(screen.getByRole('button', { name: '导入所选（1）' })).toBeDisabled()
-    fireEvent.change(screen.getByLabelText('第 1 条情境'), { target: { value: '补全情境' } })
+    fireEvent.change(screen.getByLabelText('第 1 条黑话'), { target: { value: '补全黑话' } })
     fireEvent.change(screen.getByLabelText('第 1 条原文依据（可选）'), { target: { value: '' } })
     fireEvent.click(screen.getByRole('button', { name: '导入所选（1）' }))
     await waitFor(() =>
       expect(learning.importLearningCandidates).toHaveBeenCalledWith(
-        'expression',
         ['chat1'],
-        [{ ...first, title: '补全情境', evidence: '' }],
+        [{ ...first, title: '补全黑话', evidence: '' }],
         false
       )
     )
@@ -338,18 +323,17 @@ describe('LearningCreateDialog', () => {
     show()
     await start()
     await screen.findByText('正在学习第 2 段')
-    fireEvent.click(screen.getByRole('button', { name: '编辑第 1 条表达方式' }))
-    fireEvent.change(screen.getByLabelText('第 1 条表达方式'), {
+    fireEvent.click(screen.getByRole('button', { name: '编辑第 1 条黑话' }))
+    fireEvent.change(screen.getByLabelText('第 1 条含义'), {
       target: { value: '用户修正的表达' },
     })
-    fireEvent.click(screen.getByRole('button', { name: '完成编辑第 1 条表达方式' }))
+    fireEvent.click(screen.getByRole('button', { name: '完成编辑第 1 条黑话' }))
     await act(async () => finish([second]))
     await screen.findByText('学习完成')
     expect(screen.getByText('用户修正的表达')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '导入所选（2）' }))
     await waitFor(() =>
       expect(learning.importLearningCandidates).toHaveBeenCalledWith(
-        'expression',
         ['chat1'],
         [{ ...first, description: '用户修正的表达' }, second],
         false

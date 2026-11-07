@@ -33,7 +33,6 @@ from src.llm_models.utils_model import LLMOrchestrator, LLMResponseResult
 from src.webui.dependencies import require_auth
 from src.common.http_client import get_shared_ssl_context_async
 from src.common.network_security import validate_public_url
-from src.common.prompt_i18n import load_prompt
 
 logger = get_logger("webui")
 
@@ -584,24 +583,17 @@ def _is_replyer_test_model(model_config: Dict[str, Any]) -> bool:
 
 
 def _build_replyer_test_context_factory() -> Callable[[BaseClient], List[ContextItem]]:
-    """用真实复古回复模板模拟一轮群聊，不测试工具调用或视觉能力。"""
-    prompt = load_prompt(
-        "retro_replyer",
-        extra_info_block="",
-        expression_habits_block="",
-        bot_name="麦麦",
-        time_block="现在是周末下午。",
-        dialogue_prompt="小明：终于忙完了，准备出去散散步\n小红：今天阳光不错，正好出去透透气",
-        reply_target_block="你准备参与这段聊天",
-        planner_reasoning="跟着大家聊聊周末散步，轻松自然地回应一句。",
-        keywords_reaction_prompt="",
-        reply_style="用日常口语简短回复。",
-    )
+    """模拟一轮群聊，不测试工具调用或视觉能力。"""
     items = [
         ContextItemBuilder().set_role(RoleType.System).add_text_content(
-            "你叫麦麦，是一个说话自然、随和的群友。"
+            "你叫麦麦，是一个说话自然、随和的群友。用日常口语简短回复。"
         ).build(),
-        ContextItemBuilder().set_role(RoleType.User).add_text_content(prompt).build(),
+        ContextItemBuilder().set_role(RoleType.User).add_text_content(
+            "现在是周末下午。\n"
+            "小明：终于忙完了，准备出去散散步\n"
+            "小红：今天阳光不错，正好出去透透气\n"
+            "你准备参与这段聊天"
+        ).build(),
     ]
 
     def context_factory(client: BaseClient) -> List[ContextItem]:

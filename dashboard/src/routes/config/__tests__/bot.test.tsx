@@ -237,8 +237,6 @@ const EXPECTED_FIELD_HOOKS: Array<[string, 'replace' | 'wrapper' | 'hidden']> = 
   ['chat.reply_timing.talk_value_rules', 'replace'],
   ['experimental.focus_chat_whitelist', 'replace'],
   ['experimental.focus_groups', 'replace'],
-  ['expression.expression_groups', 'replace'],
-  ['expression.learning_list', 'replace'],
   ['jargon.jargon_groups', 'replace'],
   ['jargon.learning_list', 'replace'],
   ['a_memorix.global_memory_sharing_enabled', 'hidden'],

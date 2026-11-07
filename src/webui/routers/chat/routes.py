@@ -29,7 +29,6 @@ from src.common.logger import get_logger
 from src.common.runtime_loop import run_on_main_loop
 from src.common.utils.utils_config import (
     ChatConfigUtils,
-    ExpressionConfigUtils,
     JargonConfigUtils,
 )
 from src.config.config import BOT_CONFIG_PATH, config_manager, global_config
@@ -867,7 +866,6 @@ async def _save_chat_learning_rule(chat_session: ChatSession, kind: str, request
     """写入当前聊天流的精确学习规则，并热重载配置。"""
 
     learning_config_map = {
-        "expression": ("expression", "learning_list"),
         "jargon": ("jargon", "learning_list"),
     }
     config_target = learning_config_map.get(kind)
@@ -1017,7 +1015,6 @@ def _chat_session_detail_to_response(chat_session: ChatSession) -> Dict[str, Any
     # 确保配置匹配工具能基于真实聊天流元数据判断通配与定向规则。
     core_chat_manager.get_existing_session_by_session_id(session_id)
 
-    expression_use, expression_learn = ExpressionConfigUtils.get_expression_config_for_chat(session_id)
     jargon_use, jargon_learn = JargonConfigUtils.get_jargon_config_for_chat(session_id)
     return {
         "session_id": session_id,
@@ -1027,11 +1024,6 @@ def _chat_session_detail_to_response(chat_session: ChatSession) -> Dict[str, Any
         "target_id": _get_chat_target_id(chat_session),
         "group_id": chat_session.group_id,
         "user_id": chat_session.user_id,
-        "expression": {
-            "use": expression_use,
-            "learn": expression_learn,
-            "matched_rule": _target_config_to_dict(ExpressionConfigUtils._find_expression_config_item(session_id)),
-        },
         "jargon": {
             "use": jargon_use,
             "learn": jargon_learn,

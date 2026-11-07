@@ -394,7 +394,7 @@ export async function deleteChatStreamTalkFrequency(
 
 export async function updateChatStreamLearning(
   sessionId: string,
-  kind: 'expression' | 'jargon',
+  kind: 'jargon',
   payload: UpdateLearningPayload
 ): Promise<ChatStreamDetail> {
   const result = await backendApi.put<ChatStreamDetailResponse>(

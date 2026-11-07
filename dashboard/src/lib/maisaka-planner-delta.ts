@@ -39,10 +39,10 @@ export class PlannerDeltaDecoder {
       const delta = data as PlannerDelta
       const previous = this.bases.get(key)
       if (!previous || previous.event_id !== delta.base_event_id) {
-        throw new Error(`Planner 增量基准不匹配: ${key}, expected=${delta.base_event_id}`)
+        throw new Error(`Agent 增量基准不匹配: ${key}, expected=${delta.base_event_id}`)
       }
       if (!Number.isInteger(delta.changes.event_id) || delta.changes.event_id <= 0) {
-        throw new Error(`Planner 增量缺少有效事件版本: ${key}`)
+        throw new Error(`Agent 增量缺少有效事件版本: ${key}`)
       }
       snapshot = { ...previous, ...delta.changes }
       for (const field of delta.removed_fields) {
@@ -53,7 +53,7 @@ export class PlannerDeltaDecoder {
           !Number.isInteger(delta.tools_from) || delta.tools_from < 0 ||
           delta.tools_from > previous.tools.length || !Array.isArray(delta.tools)
         ) {
-          throw new Error(`Planner 工具增量位置无效: ${key}`)
+          throw new Error(`Agent 工具增量位置无效: ${key}`)
         }
         snapshot.tools = [...previous.tools.slice(0, delta.tools_from), ...delta.tools]
       }
@@ -62,7 +62,7 @@ export class PlannerDeltaDecoder {
     } else {
       snapshot = data as PlannerSnapshot
       if (!snapshot.run_id || !Number.isInteger(snapshot.event_id) || snapshot.event_id <= 0) {
-        throw new Error(`Planner 快照缺少有效的 run_id/event_id: ${key}`)
+        throw new Error(`Agent 快照缺少有效的 run_id/event_id: ${key}`)
       }
     }
 

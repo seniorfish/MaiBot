@@ -42,7 +42,6 @@ import '@/styles/workspace.css'
 import '@/styles/management.css'
 import '@/styles/conversation.css'
 import './controls-review.css'
-import { ExpressionReview } from './expression-review'
 import { JargonReview } from './jargon-review'
 import { DataTransferReview } from './data-transfer-review'
 import { AdaptersReview } from './adapters-review'
@@ -66,7 +65,6 @@ const embedded = params.get('embedded') === '1'
 document.documentElement.dataset.reviewEmbedded = String(embedded)
 const previewPage = params.get('page')
 const pagePreviews = {
-  expression: ExpressionReview,
   jargon: JargonReview,
   transfer: DataTransferReview,
   adapters: AdaptersReview,
@@ -352,7 +350,7 @@ function Overview() {
 }
 
 const previewNames = {
-  all: '全部控件', comparison: '六种主题对照', expression: '表达方式', jargon: '黑话',
+  all: '全部控件', comparison: '六种主题对照', jargon: '黑话',
   transfer: '导入导出', adapters: '适配器', emoji: '表情包', chat: '麦麦聊天', thinking: '聊天观察',
   'plugin-pages': '插件页面设置',
   setup: '首次引导',

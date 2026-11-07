@@ -205,8 +205,8 @@ describe('formatStageName', () => {
     ['jargon_learner', '黑话抽取'],
     ['jargon_learning_update', '黑话含义推断'],
     ['llm_error', 'LLM 请求异常'],
-    ['planner', '规划器'],
-    ['replyer', '回复器'],
+    ['planner', 'Agent 决策'],
+    ['replyer', 'Agent 回复'],
     ['timing_gate', '时机判断'],
     ['custom_stage', 'custom_stage'],
   ] as const)('将 %s 格式化为 %s', (stage, label) => {
@@ -845,7 +845,7 @@ describe('extractReasoningHeaderMeta / getReasoningRecordTitle / formatPromptPre
         createPromptFile(),
         createSessionInfo({ display_name: '展示群' })
       )
-    ).toBe('规划器/展示群/标题/qq/群聊/10001')
+    ).toBe('Agent 决策/展示群/标题/qq/群聊/10001')
 
     expect(
       getReasoningRecordTitle(
@@ -857,7 +857,7 @@ describe('extractReasoningHeaderMeta / getReasoningRecordTitle / formatPromptPre
           session_display_name: null,
         })
       )
-    ).toBe('规划器/sess-1/stem-1')
+    ).toBe('Agent 决策/sess-1/stem-1')
 
     expect(
       getReasoningRecordTitle(
@@ -874,7 +874,7 @@ describe('extractReasoningHeaderMeta / getReasoningRecordTitle / formatPromptPre
           display_name: '',
         })
       )
-    ).toBe('规划器/sess-1/标题/telegram/私聊/u-9')
+    ).toBe('Agent 决策/sess-1/标题/telegram/私聊/u-9')
   })
 
   it('去掉预览文案开头的动作前缀', () => {

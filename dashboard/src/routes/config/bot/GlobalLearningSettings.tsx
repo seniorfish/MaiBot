@@ -11,8 +11,8 @@ interface LearningRule extends Record<string, unknown> {
 
 interface GlobalLearningSettingsProps {
   values: Record<string, Record<string, unknown> | null>
-  sections: Array<'expression' | 'jargon'>
-  onChange: (section: 'expression' | 'jargon', rules: LearningRule[]) => void
+  sections: Array<'jargon'>
+  onChange: (section: 'jargon', rules: LearningRule[]) => void
 }
 
 export function GlobalLearningSettings({ values, sections, onChange }: GlobalLearningSettingsProps) {
@@ -27,7 +27,7 @@ export function GlobalLearningSettings({ values, sections, onChange }: GlobalLea
         const globalRule = globalIndex >= 0 ? rules[globalIndex] : {
           platform: '', item_id: '', type: 'group' as const, use: true, learn: true,
         }
-        const label = section === 'expression' ? '表达' : '黑话'
+        const label = '黑话'
 
         const updateFlag = (field: 'use' | 'learn', checked: boolean) => {
           const nextRule = { ...globalRule, [field]: checked }

@@ -1355,7 +1355,7 @@ export function useModelConfig() {
         if (testResult.success) {
           toast({
             title: '模型测试通过',
-            description: `${modelName} ${testResult.test_kind === 'replyer' ? '已完成模拟 replyer 回复测试' : `已完成文本${testResult.visual_tested ? '、视觉' : ''}与工具调用测试`} (${testResult.latency_ms != null ? `${(testResult.latency_ms / 1000).toFixed(2)}s` : '-'})`,
+            description: `${modelName} ${testResult.test_kind === 'replyer' ? '已完成模拟 Agent 回复测试' : `已完成文本${testResult.visual_tested ? '、视觉' : ''}与工具调用测试`} (${testResult.latency_ms != null ? `${(testResult.latency_ms / 1000).toFixed(2)}s` : '-'})`,
             duration: 8000,
             action: buildModelTestDetailAction(testResult),
           })

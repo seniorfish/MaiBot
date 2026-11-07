@@ -7,11 +7,11 @@
  * - quickShortcutOptions / map / selected / filtered 派生态，toggle / reset 操作
  *
  * 设计判断：
- * - 快捷菜单内置项依赖外部交互态（重启、审核器、未审核数量），故由调用方注入
- *   handleRestart / isRestarting / uncheckedCount / onOpenReviewer，hook 负责编排其余全部逻辑。
+ * - 快捷菜单内置项依赖外部交互态（重启），故由调用方注入
+ *   handleRestart / isRestarting，hook 负责编排其余全部逻辑。
  * - 插件快捷入口的纯函数 helper（id 编解码、schema 解析等）随 hook 一并下沉。
  */
-import { BookOpen, ClipboardCheck, FileText, HardDrive, MessageSquare, Puzzle, RotateCcw, Settings } from 'lucide-react'
+import { BookOpen, FileText, HardDrive, MessageSquare, Puzzle, RotateCcw, Settings } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -43,7 +43,6 @@ const SIDEBAR_REDUNDANT_SHORTCUT_IDS = new Set([
   'route:model-providers',
   'route:bot-config',
   'route:emoji',
-  'route:expression',
 ])
 
 function loadQuickShortcutIds(): string[] {
@@ -207,15 +206,11 @@ function getFallbackPluginShortcut(id: string, t: TFunction): QuickShortcutDefin
 interface UseQuickShortcutsParams {
   isRestarting: boolean
   handleRestart: () => void | Promise<void>
-  uncheckedCount: number
-  onOpenReviewer: () => void
 }
 
 export function useQuickShortcuts({
   isRestarting,
   handleRestart,
-  uncheckedCount,
-  onOpenReviewer,
 }: UseQuickShortcutsParams) {
   const { t } = useTranslation()
   const [quickShortcutIds, setQuickShortcutIds] = useState<string[]>(loadQuickShortcutIds)
@@ -328,16 +323,6 @@ export function useQuickShortcuts({
         disabled: isRestarting,
       },
       {
-        id: 'action:expression-review',
-        category: 'resource',
-        label: t('home.quickActions.expressionReview'),
-        description: t('home.quickActions.descriptions.expressionReview'),
-        icon: ClipboardCheck,
-        action: onOpenReviewer,
-        badge:
-          uncheckedCount > 0 ? (uncheckedCount > 99 ? '99+' : String(uncheckedCount)) : undefined,
-      },
-      {
         id: 'route:logs',
         category: 'monitor',
         label: t('home.quickActions.viewLogs'),
@@ -405,7 +390,7 @@ export function useQuickShortcuts({
       },
       ...pluginShortcuts,
     ],
-    [configShortcuts, handleRestart, isRestarting, onOpenReviewer, pluginShortcuts, t, uncheckedCount]
+    [configShortcuts, handleRestart, isRestarting, pluginShortcuts, t]
   )
 
   const quickShortcutMap = useMemo(

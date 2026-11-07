@@ -36,7 +36,6 @@ from src.config.official_configs import (
     ChineseTypoConfig,
     DebugConfig,
     EmojiConfig,
-    ExpressionConfig,
     JargonConfig,
     KeywordReactionConfig,
     LogConfig,
@@ -1302,7 +1301,6 @@ def get_config_section_schema(section_name: str):
     - visual: VisualConfig
     - message_receive: MessageReceiveConfig
     - emoji: EmojiConfig
-    - expression: ExpressionConfig
     - jargon: JargonConfig
     - keyword_reaction: KeywordReactionConfig
     - chinese_typo: ChineseTypoConfig
@@ -1329,7 +1327,6 @@ def get_config_section_schema(section_name: str):
         "visual": VisualConfig,
         "message_receive": MessageReceiveConfig,
         "emoji": EmojiConfig,
-        "expression": ExpressionConfig,
         "jargon": JargonConfig,
         "keyword_reaction": KeywordReactionConfig,
         "chinese_typo": ChineseTypoConfig,

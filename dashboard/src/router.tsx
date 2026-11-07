@@ -129,23 +129,14 @@ const emojiManagementRoute = createRoute({
   },
 })
 
-// 资源管理路由 - 学习（表达方式、黑话与表情包）
+// 资源管理路由 - 学习（黑话与表情包）
 const learningRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: '/resource/learning',
-  validateSearch: (search: Record<string, unknown>): { tab: 'expression' | 'jargon' | 'emoji' } => ({
-    tab: search.tab === 'jargon' || search.tab === 'emoji' ? search.tab : 'expression',
+  validateSearch: (search: Record<string, unknown>): { tab: 'jargon' | 'emoji' } => ({
+    tab: search.tab === 'emoji' ? 'emoji' : 'jargon',
   }),
   component: lazyRouteComponent(() => import('./routes/resource/learning'), 'LearningPage'),
-})
-
-// 旧表达方式地址进入学习页的表达页签。
-const expressionManagementRoute = createRoute({
-  getParentRoute: () => protectedRoute,
-  path: '/resource/expression',
-  beforeLoad: () => {
-    throw redirect({ to: '/resource/learning', search: { tab: 'expression' }, replace: true })
-  },
 })
 
 // 资源管理路由 - 人物信息管理
@@ -421,7 +412,6 @@ const routeTree = rootRoute.addChildren([
     promptManagementRoute,
     emojiManagementRoute,
     learningRoute,
-    expressionManagementRoute,
     jargonManagementRoute,
     personManagementRoute,
     knowledgeGraphRoute,

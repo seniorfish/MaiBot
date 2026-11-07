@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
-import { BotPlatformAccountsHook, ExpressionGroupsHook, MultipleReplyStyleHook } from '../complexFieldHooks'
+import { BotPlatformAccountsHook, JargonGroupsHook, MultipleReplyStyleHook } from '../complexFieldHooks'
 import { createJsonFieldHook } from '../JsonFieldHookFactory'
 import { createListItemEditorHook } from '../ListItemEditorHookFactory'
 import { getChatStreams, type ChatStream } from '@/lib/chat-management-api'
@@ -198,7 +198,7 @@ describe('custom bot config hooks', () => {
     ]
 
     const { rerender } = render(
-      <ExpressionGroupsHook
+      <JargonGroupsHook
         fieldPath="a_memorix.shared_memory_groups"
         onChange={vi.fn()}
         onParentChange={onParentChange}
@@ -213,7 +213,7 @@ describe('custom bot config hooks', () => {
     expect(screen.getByRole('switch', { name: '全局共享记忆' })).toBeChecked()
 
     rerender(
-      <ExpressionGroupsHook
+      <JargonGroupsHook
         fieldPath="a_memorix.shared_memory_groups"
         onChange={vi.fn()}
         onParentChange={onParentChange}
@@ -299,7 +299,7 @@ describe('custom bot config hooks', () => {
     const onChange = vi.fn()
 
     render(
-      <ExpressionGroupsHook
+      <JargonGroupsHook
         fieldPath="a_memorix.shared_memory_groups"
         onChange={onChange}
         parentValues={{ global_memory_sharing_enabled: false }}
@@ -336,7 +336,7 @@ describe('custom bot config hooks', () => {
     const onChange = vi.fn()
 
     render(
-      <ExpressionGroupsHook
+      <JargonGroupsHook
         fieldPath="a_memorix.shared_memory_groups"
         onChange={onChange}
         parentValues={{ global_memory_sharing_enabled: false }}
@@ -420,7 +420,7 @@ describe('custom bot config hooks', () => {
     vi.mocked(getChatStreams).mockResolvedValueOnce([currentChat, legacyChat])
 
     render(
-      <ExpressionGroupsHook
+      <JargonGroupsHook
         fieldPath="a_memorix.shared_memory_groups"
         onChange={vi.fn()}
         parentValues={{ global_memory_sharing_enabled: false }}
@@ -453,7 +453,7 @@ describe('custom bot config hooks', () => {
     ])
 
     render(
-      <ExpressionGroupsHook
+      <JargonGroupsHook
         fieldPath="a_memorix.shared_memory_groups"
         onChange={vi.fn()}
         parentValues={{ global_memory_sharing_enabled: false }}
@@ -491,7 +491,7 @@ describe('custom bot config hooks', () => {
       ],
     }
     const { rerender } = render(
-      <ExpressionGroupsHook
+      <JargonGroupsHook
         fieldPath="a_memorix.shared_memory_groups"
         onChange={vi.fn()}
         parentValues={{ global_memory_sharing_enabled: false }}
@@ -504,7 +504,7 @@ describe('custom bot config hooks', () => {
     expect(screen.getByDisplayValue('123456')).toBeInTheDocument()
 
     rerender(
-      <ExpressionGroupsHook
+      <JargonGroupsHook
         fieldPath="a_memorix.shared_memory_groups"
         onChange={vi.fn()}
         parentValues={{ global_memory_sharing_enabled: false }}
@@ -531,7 +531,7 @@ describe('custom bot config hooks', () => {
     const user = userEvent.setup()
 
     render(
-      <ExpressionGroupsHook
+      <JargonGroupsHook
         fieldPath="a_memorix.shared_memory_groups"
         onChange={vi.fn()}
         parentValues={{ global_memory_sharing_enabled: false }}

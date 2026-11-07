@@ -88,7 +88,6 @@
       "promptManagement": "Prompt管理",
       "emojiManagement": "絵文字管理",
       "learning": "学習",
-      "expressionManagement": "表現管理",
       "slangManagement": "スラング管理",
       "personInfo": "人物情報",
       "knowledgeGraph": "長期記憶グラフ",
@@ -195,7 +194,7 @@
       "stop": "サンドボックスを停止",
       "restart": "サンドボックスを再作成",
       "refresh": "画面を更新",
-      "help": "内部Planner、サブエージェント、外部AgentはこのPCを共有します。引き継ぐとクリック、右クリック、文字入力ができます。引き継ぎ時は実行中の操作をキャンセルし、自律入力を停止します。入力の一時停止では送信済みの操作は続行されます。",
+      "help": "内部Agent、サブエージェント、外部AgentはこのPCを共有します。引き継ぐとクリック、右クリック、文字入力ができます。引き継ぎ時は実行中の操作をキャンセルし、自律入力を停止します。入力の一時停止では送信済みの操作は続行されます。",
       "screen": "コンピューター画面",
       "text": "操作を引き継いで文字を入力",
       "type": "文字入力",
@@ -829,7 +828,7 @@
       },
       "modelSetup": {
         "title": "モデル設定",
-        "description": "planner と replyer モデルを設定します"
+        "description": "Agent の意思決定モデルと返信モデルを設定します"
       }
     },
     "loading": {
@@ -851,8 +850,8 @@
       "enterProviderName": "APIプロバイダー名を入力してください",
       "enterBaseUrl": "API Base URL を入力してください",
       "enterApiKey": "API Key を入力してください",
-      "enterPlannerModelIdentifier": "planner モデル識別子を入力してください",
-      "enterReplyerModelIdentifier": "replyer モデル識別子を入力してください",
+      "enterPlannerModelIdentifier": "Agent の意思決定モデル識別子を入力してください",
+      "enterReplyerModelIdentifier": "Agent の返信モデル識別子を入力してください",
       "customTokenInvalid": "Token が要件を満たしていません：{{failedRules}}"
     },
     "toast": {
@@ -1045,7 +1044,7 @@
       "modelSetup": {
         "planner": {
           "identifier": {
-            "label": "planner モデル識別子 *",
+            "label": "Agent 意思決定モデル識別子 *",
             "description": "APIサービスが提供する実際のモデルID。モデル名はこの識別子で初期化されます"
           },
           "visual": {
@@ -1054,7 +1053,7 @@
         },
         "replyer": {
           "identifier": {
-            "label": "replyer モデル識別子 *",
+            "label": "Agent 返信モデル識別子 *",
             "description": "APIサービスが提供する実際のモデルID。モデル名はこの識別子で初期化されます"
           },
           "visual": {
@@ -1186,9 +1185,7 @@
       "model": "モデル設定",
       "modelDesc": "モデルパラメーターを設定",
       "emoji": "絵文字管理",
-      "expression": "表現管理",
-      "learningDesc": "学習した表現、スラング、絵文字を管理",
-      "expressionDesc": "ボットの表現を管理",
+      "learningDesc": "学習したスラングと絵文字を管理",
       "person": "人物情報",
       "personDesc": "人物情報を管理",
       "jargon": "スラング管理",
@@ -1513,12 +1510,11 @@
       "title": "クイック操作",
       "restart": "MaiBotを再起動",
       "restarting": "再起動中...",
-      "expressionReview": "表現レビュー",
       "viewLogs": "ログを見る",
       "chat": "麦麦とチャット",
       "docs": "ドキュメントへ",
-      "replyerLogs": "返信ログ",
-      "plannerLogs": "計画ログ",
+      "replyerLogs": "Agent 返信ログ",
+      "plannerLogs": "Agent 意思決定ログ",
       "reasoningLogs": "推論ログ",
       "pluginManage": "プラグイン管理",
       "systemSettings": "WebUI 設定",
@@ -1530,19 +1526,17 @@
       "modelTasks": "モデル機能割り当て",
       "botConfig": "本体設定",
       "emojiManagement": "絵文字管理",
-      "expressionManagement": "表現管理",
       "statistics": "詳細統計データ",
       "customize": "カスタマイズ",
       "empty": "クイックショートカットがまだ選択されていません",
       "add": "ショートカットを追加",
       "descriptions": {
         "restart": "MaiBot 本体プロセスを再起動",
-        "expressionReview": "表現学習レビューのダイアログを開く",
         "viewLogs": "WebUI ログを表示",
         "chat": "麦麦チャットを開く",
         "docs": "麦麦のドキュメントを開く",
-        "replyerLogs": "返信段階の推論記録を表示",
-        "plannerLogs": "計画段階の推論記録を表示",
+        "replyerLogs": "Agent 返信段階の推論記録を表示",
+        "plannerLogs": "Agent 意思決定段階の推論記録を表示",
         "reasoningLogs": "推論ログを開く",
         "configSection": "本体設定 / {{section}}を開く",
         "pluginManage": "プラグインマーケットと管理ページを開く",
@@ -1555,7 +1549,6 @@
         "modelTasks": "モデル管理 / 機能割り当てを開く",
         "botConfig": "MaiBot 本体設定を開く",
         "emojiManagement": "絵文字リソース管理を開く",
-        "expressionManagement": "表現管理を開く",
         "statistics": "maibot_statistics.html を開く"
       },
       "categories": {

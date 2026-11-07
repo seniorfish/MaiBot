@@ -116,7 +116,7 @@ function makeRound(cycle: number): TimelineEntry {
     final_state: {
       time_records: {},
       agent_state: 'running',
-      end_detail: 'Planner 工具执行完成，继续下一轮内部思考。',
+      end_detail: 'Agent 工具执行完成，继续下一轮内部思考。',
     },
   }
   return {
@@ -156,7 +156,7 @@ const rounds: TimelineEntry[] = [
         learning: {
           status: 'completed', detail: '',
           learners: [
-            { name: '表达学习', status: 'completed', detail: '写入 4 条表达', contents: ['表示赞同 → 确实如此', '表示惊讶 → 这么厉害', '分享喜悦 → 今天真开心', '表达感谢 → 谢谢你'] },
+            { name: '黑话学习', status: 'completed', detail: '写入 4 条黑话', contents: ['表示赞同 → 确实如此', '表示惊讶 → 这么厉害', '分享喜悦 → 今天真开心', '表达感谢 → 谢谢你'] },
             { name: '黑话学习', status: 'completed', detail: '处理 2 个黑话候选', contents: ['好耶', '绝绝子'] },
             { name: '高频词学习', status: 'completed', detail: '更新 2 个词条', contents: ['模型（4 次）', 'agent（2 次）'] },
           ],

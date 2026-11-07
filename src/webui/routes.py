@@ -24,7 +24,6 @@ from src.webui.routers.bot_accounts import router as bot_accounts_router
 from src.webui.routers.config import router as config_router
 from src.webui.routers.data_transfer import router as data_transfer_router
 from src.webui.routers.emoji import router as emoji_router
-from src.webui.routers.expression import router as expression_router
 from src.webui.routers.jargon import router as jargon_router
 from src.webui.routers.memory import router as memory_router
 from src.webui.routers.mcp import router as mcp_router
@@ -58,8 +57,6 @@ router.include_router(mcp_router)
 router.include_router(statistics_router)
 # 注册人物信息管理路由
 router.include_router(person_router)
-# 注册表达方式管理路由
-router.include_router(expression_router)
 # 注册黑话管理路由
 router.include_router(jargon_router)
 router.include_router(text_learning_router)

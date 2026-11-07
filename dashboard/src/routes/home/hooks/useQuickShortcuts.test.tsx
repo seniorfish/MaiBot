@@ -43,11 +43,9 @@ const SIDEBAR_REDUNDANT_IDS = [
   'route:model-providers',
   'route:bot-config',
   'route:emoji',
-  'route:expression',
 ]
 const BUILTIN_OPTION_IDS = [
   'action:restart',
-  'action:expression-review',
   'route:logs',
   'route:chat',
   'external:docs',
@@ -144,8 +142,6 @@ function renderQuickShortcuts(
       initialProps: {
         isRestarting: false,
         handleRestart: vi.fn(),
-        uncheckedCount: 0,
-        onOpenReviewer: vi.fn(),
         ...overrides,
       },
       wrapper: makeWrapper(),
@@ -287,58 +283,31 @@ describe('useQuickShortcuts', () => {
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]')).toEqual(DEFAULT_IDS)
   })
 
-  it('重启中切换文案并禁用，未审核数量按 99+ 截断', () => {
+  it('重启中切换文案并禁用', () => {
     const handleRestart = vi.fn()
-    const onOpenReviewer = vi.fn()
     const { result, rerender } = renderQuickShortcuts({
       isRestarting: true,
       handleRestart,
-      uncheckedCount: 100,
-      onOpenReviewer,
     })
 
     const restarting = result.current.filteredQuickShortcutOptions.find(
       (item) => item.id === 'action:restart'
     )
-    const reviewOverflow = result.current.filteredQuickShortcutOptions.find(
-      (item) => item.id === 'action:expression-review'
-    )
     expect(restarting?.label).toBe('home.quickActions.restarting')
     expect(restarting?.disabled).toBe(true)
-    expect(reviewOverflow?.badge).toBe('99+')
 
     void restarting?.action?.()
-    void reviewOverflow?.action?.()
     expect(handleRestart).toHaveBeenCalledTimes(1)
-    expect(onOpenReviewer).toHaveBeenCalledTimes(1)
 
     rerender({
       isRestarting: false,
       handleRestart,
-      uncheckedCount: 7,
-      onOpenReviewer,
     })
     const restart = result.current.filteredQuickShortcutOptions.find(
       (item) => item.id === 'action:restart'
     )
-    const review = result.current.filteredQuickShortcutOptions.find(
-      (item) => item.id === 'action:expression-review'
-    )
     expect(restart?.label).toBe('home.quickActions.restart')
     expect(restart?.disabled).toBe(false)
-    expect(review?.badge).toBe('7')
-
-    rerender({
-      isRestarting: false,
-      handleRestart,
-      uncheckedCount: 0,
-      onOpenReviewer,
-    })
-    expect(
-      result.current.filteredQuickShortcutOptions.find(
-        (item) => item.id === 'action:expression-review'
-      )?.badge
-    ).toBeUndefined()
   })
 
   it('搜索按标签与描述过滤，空白查询返回全部内置项', () => {

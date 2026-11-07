@@ -445,7 +445,6 @@ export function JargonManagementPage({ browserHeader }: { browserHeader?: ReactN
     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden p-3 pb-4 sm:p-4">
       {isExportDialogOpen && (
         <LearningExportDialog
-          kind="jargon"
           selectedIds={selectedIds}
           chats={chatList.map((chat) => ({
             id: chat.session_id,

@@ -55,6 +55,12 @@ export interface StageStatusInfo {
   roundText: string
   agentState: string
   waitUntil?: number
+  /** Agent 核心的待处理事件数；旧版后端不提供时为 null */
+  eventQueueSize: number | null
+  /** Agent 是否处于待机（sleep）状态；旧版后端不提供时为 null */
+  sleeping: boolean | null
+  /** 定时唤醒时间戳（秒）；无定时唤醒或旧版后端不提供时为 null */
+  sleepUntil: number | null
   stageStartedAt: number
   updatedAt: number
 }
@@ -194,6 +200,9 @@ function toStageStatusInfo(raw: Record<string, unknown>): StageStatusInfo | null
     roundText: typeof raw.round_text === 'string' ? raw.round_text : '',
     agentState: typeof raw.agent_state === 'string' ? raw.agent_state : '',
     waitUntil: typeof raw.wait_until === 'number' ? raw.wait_until : undefined,
+    eventQueueSize: typeof raw.event_queue_size === 'number' ? raw.event_queue_size : null,
+    sleeping: typeof raw.sleeping === 'boolean' ? raw.sleeping : null,
+    sleepUntil: typeof raw.sleep_until === 'number' ? raw.sleep_until : null,
     stageStartedAt:
       typeof raw.stage_started_at === 'number' ? raw.stage_started_at : Date.now() / 1000,
     updatedAt: typeof raw.updated_at === 'number' ? raw.updated_at : Date.now() / 1000,

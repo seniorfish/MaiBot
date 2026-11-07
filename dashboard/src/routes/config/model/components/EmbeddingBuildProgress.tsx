@@ -1,35 +1,12 @@
 import { useEffect, useState } from 'react'
 
 import { Progress } from '@/components/ui/progress'
-import {
-  getExpressionVectorBuildProgress,
-  type ExpressionVectorBuildProgress,
-} from '@/lib/expression-api'
 import { getMemoryRuntimeConfig, type MemoryRuntimeConfigPayload } from '@/lib/memory-api'
 
 interface BuildProgressRow {
   label: string
   detail: string
   percent: number
-}
-
-function expressionRow(data: ExpressionVectorBuildProgress | null, error: boolean): BuildProgressRow {
-  if (error) return { label: '表达库构建', detail: '状态获取失败', percent: 0 }
-  if (!data) return { label: '表达库构建', detail: '正在读取状态', percent: 0 }
-
-  const descriptions: Record<ExpressionVectorBuildProgress['status'], string> = {
-    disabled: '表达向量模式未启用',
-    unconfigured: '未配置嵌入模型',
-    waiting_profile: '等待新模型标定',
-    pending: `等待后台补建 · ${data.completed}/${data.total}`,
-    running: `后台补建中 · ${data.completed}/${data.total}`,
-    completed: `已完成 · ${data.completed}/${data.total}`,
-  }
-  return {
-    label: '表达库构建',
-    detail: descriptions[data.status],
-    percent: data.status === 'disabled' || data.status === 'unconfigured' ? 0 : data.percent,
-  }
 }
 
 function memoryRow(
@@ -117,9 +94,7 @@ function ProgressLine({ row }: { row: BuildProgressRow }) {
 }
 
 export function EmbeddingBuildProgress({ selectedEmbeddingModel }: { selectedEmbeddingModel: string }) {
-  const [expression, setExpression] = useState<ExpressionVectorBuildProgress | null>(null)
   const [memory, setMemory] = useState<MemoryRuntimeConfigPayload | null>(null)
-  const [expressionError, setExpressionError] = useState(false)
   const [memoryError, setMemoryError] = useState(false)
 
   useEffect(() => {
@@ -127,22 +102,13 @@ export function EmbeddingBuildProgress({ selectedEmbeddingModel }: { selectedEmb
     let timer: ReturnType<typeof setTimeout> | undefined
 
     async function refresh() {
-      const [expressionResult, memoryResult] = await Promise.allSettled([
-        getExpressionVectorBuildProgress(),
-        getMemoryRuntimeConfig(),
-      ])
-      if (!active) return
-
-      if (expressionResult.status === 'fulfilled') {
-        setExpression(expressionResult.value)
-        setExpressionError(false)
-      } else {
-        setExpressionError(true)
-      }
-      if (memoryResult.status === 'fulfilled') {
-        setMemory(memoryResult.value)
+      try {
+        const value = await getMemoryRuntimeConfig()
+        if (!active) return
+        setMemory(value)
         setMemoryError(false)
-      } else {
+      } catch {
+        if (!active) return
         setMemoryError(true)
       }
       timer = setTimeout(refresh, 10_000)
@@ -157,7 +123,6 @@ export function EmbeddingBuildProgress({ selectedEmbeddingModel }: { selectedEmb
 
   return (
     <div className="space-y-4 border-t pt-4" aria-label="嵌入模型构建进度">
-      <ProgressLine row={expressionRow(expression, expressionError)} />
       <ProgressLine row={memoryRow(memory, memoryError, selectedEmbeddingModel)} />
     </div>
   )

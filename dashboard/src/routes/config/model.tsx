@@ -1309,7 +1309,7 @@ function ModelConfigPageContent() {
                             <div>
                               <span className="text-muted-foreground">{selectedModelTestResult.test_kind === 'replyer' ? '测试方式' : '工具调用'}</span>
                               <p className={selectedModelTestResult.test_kind === 'replyer' || selectedModelTestResult.tool_call_ok ? 'font-medium' : 'font-medium text-destructive'}>
-                                {selectedModelTestResult.test_kind === 'replyer' ? '模拟 replyer 任务（仅文本回复）' : selectedModelTestResult.tool_call_ok ? '已返回测试工具调用' : '未返回测试工具调用'}
+                                {selectedModelTestResult.test_kind === 'replyer' ? '模拟 Agent 回复任务（仅文本回复）' : selectedModelTestResult.tool_call_ok ? '已返回测试工具调用' : '未返回测试工具调用'}
                               </p>
                             </div>
                             <div>
@@ -2453,7 +2453,7 @@ function ModelConfigPageContent() {
             <AlertDialogDescription asChild>
               <div className="space-y-3 text-sm">
                 <p>
-                  <strong className="text-foreground">注意：</strong>更换嵌入模型后，表达库会在后台自动补建；记忆向量若提示需要重建，请在长期记忆页处理。
+                  <strong className="text-foreground">注意：</strong>更换嵌入模型后，记忆向量若提示需要重建，请在长期记忆页处理。
                 </p>
                 <p className="text-foreground font-medium">
                   确定要更换嵌入模型吗？

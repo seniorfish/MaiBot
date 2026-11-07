@@ -379,7 +379,7 @@ function SetupPageContent() {
     if (modelFetchStatus === 'success' && (
       !availableModels.some((model) => model.id === config.planner_model_identifier) ||
       !availableModels.some((model) => model.id === config.replyer_model_identifier)
-    )) return '请选择用于规划和回复的模型'
+    )) return '请选择用于 Agent 决策和回复的模型'
     if (!config.planner_model_identifier.trim()) {
       return t('setupPage.validation.enterPlannerModelIdentifier')
     }

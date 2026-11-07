@@ -1,4 +1,4 @@
-"""长文学习的分段、候选校验与模型调用；候选在用户确认前不写数据库。"""
+"""黑话长文学习的分段、候选校验与模型调用；候选在用户确认前不写数据库。"""
 
 from typing import Dict, List, Literal, Optional
 
@@ -14,11 +14,11 @@ logger = get_logger("webui.text_learning")
 
 MAX_SOURCE_LENGTH = 200_000
 CHUNK_LENGTH = 4_500
-LearningKind = Literal["expression", "jargon"]
+LearningKind = Literal["jargon"]
 
 
 class LearnedCandidate(BaseModel):
-    """两类学习共用的候选：标题对应情境/黑话，描述对应风格/含义。"""
+    """学习候选：标题对应黑话，描述对应含义。"""
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 

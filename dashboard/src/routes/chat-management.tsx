@@ -22,11 +22,10 @@ import { formatChatDisplayName, getChatTypeText } from '@/lib/chat-display'
 import { getChatStreams, type ChatStream, type ChatStreamType } from '@/lib/chat-management-api'
 import { getBotConfig, updateBotConfigSection } from '@/lib/config-api'
 
-type MutualGroupKind = 'expression' | 'jargon' | 'memory'
+type MutualGroupKind = 'jargon' | 'memory'
 const MUTUAL_GROUP_CHAT_RESULT_LIMIT = 50
 
 const MUTUAL_GROUP_KIND_LABEL: Record<MutualGroupKind, string> = {
-  expression: '表达',
   jargon: '黑话',
   memory: '记忆',
 }
@@ -40,7 +39,6 @@ interface TargetItem {
 
 interface ChatStreamGroupConfig {
   targets?: TargetItem[]
-  expression_groups?: TargetItem[]
   jargon_groups?: TargetItem[]
 }
 
@@ -77,7 +75,7 @@ function normalizeMutualGroups(value: unknown): ChatStreamGroupConfig[] {
     }
     const rawGroup = group as ChatStreamGroupConfig
     const rawTargets =
-      rawGroup.targets ?? rawGroup.expression_groups ?? rawGroup.jargon_groups ?? []
+      rawGroup.targets ?? rawGroup.jargon_groups ?? []
     const targets = Array.isArray(rawTargets)
       ? rawTargets.map(normalizeTarget).filter((target): target is TargetItem => target !== null)
       : []
@@ -129,10 +127,10 @@ function MutualGroupsView({
   const { toast } = useToast()
   const [kind, setKind] = useState<MutualGroupKind>(() => {
     if (typeof window === 'undefined') {
-      return 'expression'
+      return 'jargon'
     }
     const queryKind = new URLSearchParams(window.location.search).get('kind')
-    return queryKind === 'memory' || queryKind === 'jargon' ? queryKind : 'expression'
+    return queryKind === 'memory' ? queryKind : 'jargon'
   })
   const [addDialogGroupIndex, setAddDialogGroupIndex] = useState<number | null>(null)
   const [addDialogSearch, setAddDialogSearch] = useState('')
@@ -143,11 +141,7 @@ function MutualGroupsView({
   })
   const sectionName = kind === 'memory' ? 'a_memorix' : kind
   const groupFieldName =
-    kind === 'memory'
-      ? 'shared_memory_groups'
-      : kind === 'expression'
-        ? 'expression_groups'
-        : 'jargon_groups'
+    kind === 'memory' ? 'shared_memory_groups' : 'jargon_groups'
   const sectionData = useMemo(() => {
     const raw = configQuery.data?.[sectionName]
     return (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
@@ -318,12 +312,11 @@ function MutualGroupsView({
       <div className="flex shrink-0 flex-col gap-3 border-b p-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-1">
           <h2 className="text-base font-semibold">共享组管理</h2>
-          <p className="text-muted-foreground text-sm">管理表达、黑话和记忆的聊天流共享组。</p>
+          <p className="text-muted-foreground text-sm">管理黑话和记忆的聊天流共享组。</p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="bg-background inline-flex rounded-md border p-1">
             {[
-              ['expression', '表达'],
               ['jargon', '黑话'],
               ['memory', '记忆'],
             ].map(([value, label]) => (

@@ -5,12 +5,11 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import type { LearnedCandidate, LearningKind } from '@/lib/text-learning-api'
+import type { LearnedCandidate } from '@/lib/text-learning-api'
 
 export function LearningCandidateRow({
   candidate,
   index,
-  kind,
   selected,
   imported,
   importing,
@@ -19,7 +18,6 @@ export function LearningCandidateRow({
 }: {
   candidate: LearnedCandidate
   index: number
-  kind: LearningKind
   selected: boolean
   imported: boolean
   importing: boolean
@@ -27,10 +25,10 @@ export function LearningCandidateRow({
   onChange: (change: Partial<LearnedCandidate>) => void
 }) {
   const [editing, setEditing] = useState(false)
-  const noun = kind === 'expression' ? '表达方式' : '黑话'
-  const titleLabel = kind === 'expression' ? '情境' : '黑话'
-  const descriptionLabel = kind === 'expression' ? '表达方式' : '含义'
-  const prefix = `${kind}-learning-candidate-${index}`
+  const noun = '黑话'
+  const titleLabel = '黑话'
+  const descriptionLabel = '含义'
+  const prefix = `jargon-learning-candidate-${index}`
   const invalid = !candidate.title.trim() || !candidate.description.trim()
 
   return (

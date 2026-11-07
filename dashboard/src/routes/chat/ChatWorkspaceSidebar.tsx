@@ -187,6 +187,9 @@ const ObservedConversationItem = memo(function ObservedConversationItem({
     && previous.status?.agentState === next.status?.agentState
     && previous.status?.stage === next.status?.stage
     && previous.status?.waitUntil === next.status?.waitUntil
+    && previous.status?.eventQueueSize === next.status?.eventQueueSize
+    && previous.status?.sleeping === next.status?.sleeping
+    && previous.status?.sleepUntil === next.status?.sleepUntil
     && previous.latestMessage?.content === next.latestMessage?.content
     && previous.latestMessage?.mediaText === next.latestMessage?.mediaText
     && previous.latestMessage?.speakerName === next.latestMessage?.speakerName

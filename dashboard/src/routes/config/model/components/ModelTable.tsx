@@ -77,7 +77,7 @@ function getModelTestStatus(result: ModelTestResult | undefined, isTesting: bool
     const summary = isEmbeddingTest
       ? `测试通过：嵌入向量正常${result.embedding_dimension ? `（维度 ${result.embedding_dimension}）` : ''}`
       : result.test_kind === 'replyer'
-        ? '测试通过：模拟 replyer 任务回复正常'
+        ? '测试通过：模拟 Agent 回复任务回复正常'
         : `测试通过：文本${result.visual_tested ? '、视觉' : ''}与工具调用正常`
     return {
       description: `${summary}${

@@ -548,6 +548,9 @@ describe('阶段状态', () => {
       detail: '正在调用工具',
       roundText: '第 1 轮',
       agentState: 'running',
+      eventQueueSize: null,
+      sleeping: null,
+      sleepUntil: null,
       stageStartedAt: 90,
       updatedAt: 100,
     })

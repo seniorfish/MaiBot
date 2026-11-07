@@ -217,7 +217,7 @@ describe('updateChatStreamLearning', () => {
     putMock.mockResolvedValue({ success: true })
 
     await expect(
-      updateChatStreamLearning('s1', 'expression', { use: true, learn: true })
+      updateChatStreamLearning('s1', 'jargon', { use: true, learn: true })
     ).rejects.toThrow('聊天流详情为空')
   })
 })

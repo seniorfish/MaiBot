@@ -7,7 +7,6 @@ import { modelListCache } from '../model/constants'
 import type { ModelInfo } from '../model/types'
 import * as configApi from '@/lib/config-api'
 import * as configSearchNavigation from '@/lib/config-search-navigation'
-import * as expressionApi from '@/lib/expression-api'
 import * as memoryApi from '@/lib/memory-api'
 
 const toastMock = vi.fn()
@@ -62,7 +61,6 @@ vi.mock('@/lib/config-api', () => ({
   fetchModelClientTypes: vi.fn(),
 }))
 
-vi.mock('@/lib/expression-api', () => ({ getExpressionVectorBuildProgress: vi.fn() }))
 vi.mock('@/lib/memory-api', () => ({ getMemoryRuntimeConfig: vi.fn() }))
 
 // 真实表格/卡片用于覆盖响应式双视图；任务卡片仍桩以便稳定触发 embedding 警告
@@ -300,12 +298,6 @@ beforeEach(() => {
   vi.mocked(configApi.getModelConfig).mockResolvedValue(baseConfig() as never)
   vi.mocked(configApi.getModelConfigSchema).mockResolvedValue(baseSchema() as never)
   vi.mocked(configApi.getModelConfigVersions).mockResolvedValue(baseVersions() as never)
-  vi.mocked(expressionApi.getExpressionVectorBuildProgress).mockResolvedValue({
-    status: 'running',
-    completed: 40,
-    total: 100,
-    percent: 40,
-  })
   vi.mocked(memoryApi.getMemoryRuntimeConfig).mockResolvedValue({
     success: true,
     embedding_fingerprint: { model: 'old-embed-model' },
@@ -487,14 +479,12 @@ describe('ModelConfigPage 特征化', () => {
   })
 
   describe('embedding 换模型警告', () => {
-    it('显示表达库进度和记忆库重建状态', async () => {
+    it('显示记忆库重建状态', async () => {
       const user = userEvent.setup()
       await renderModelPage()
       await user.click(screen.getByRole('tab', { name: '功能分配' }))
 
-      expect(await screen.findByText('表达库构建')).toBeInTheDocument()
-      expect(screen.getByText('后台补建中 · 40/100')).toBeInTheDocument()
-      expect(screen.getByText('记忆库构建')).toBeInTheDocument()
+      expect(await screen.findByText('记忆库构建')).toBeInTheDocument()
       expect(screen.getByText('需要在长期记忆页重建向量')).toBeInTheDocument()
     })
 

@@ -177,7 +177,7 @@ describe('PackDetailPage 详情渲染', () => {
 
     // 任务配置标签页：任务名映射 + 展开后展示模型与 temperature
     await user.click(screen.getByRole('tab', { name: /任务/ }))
-    const trigger = screen.getByRole('button', { name: /回复生成/ })
+    const trigger = screen.getByRole('button', { name: /Agent 回复/ })
     expect(within(trigger).getByText('1 个模型')).toBeInTheDocument()
     await user.click(trigger)
     expect(screen.getByText('model-a')).toBeInTheDocument()

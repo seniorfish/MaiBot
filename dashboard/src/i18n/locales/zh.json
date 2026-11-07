@@ -88,7 +88,6 @@
       "promptManagement": "Prompt管理",
       "emojiManagement": "表情包",
       "learning": "学习",
-      "expressionManagement": "表达方式",
       "slangManagement": "黑话",
       "personInfo": "人物信息管理",
       "knowledgeGraph": "长期记忆图谱",
@@ -262,7 +261,7 @@
       "stop": "停止沙盒",
       "restart": "重建沙盒",
       "refresh": "刷新画面",
-      "help": "内部 Planner、子 Agent 和外接 Agent 共用此电脑。接管后可点击画面、右键和输入文字。接管会取消在途操作并阻止自主输入；暂停电脑输入不会中断已提交的操作。",
+      "help": "内置 Agent、子 Agent 和外接 Agent 共用此电脑。接管后可点击画面、右键和输入文字。接管会取消在途操作并阻止自主输入；暂停电脑输入不会中断已提交的操作。",
       "screen": "电脑桌面",
       "text": "接管后输入文字，支持中文",
       "type": "输入文字",
@@ -918,8 +917,8 @@
       "enterProviderName": "请输入 API 提供商名称",
       "enterBaseUrl": "请输入 API Base URL",
       "enterApiKey": "请输入 API Key",
-      "enterPlannerModelIdentifier": "请输入 planner 模型标识符",
-      "enterReplyerModelIdentifier": "请输入 replyer 模型标识符",
+      "enterPlannerModelIdentifier": "请输入 Agent 决策模型标识符",
+      "enterReplyerModelIdentifier": "请输入 Agent 回复模型标识符",
       "customTokenInvalid": "密码不符合要求：{{failedRules}}"
     },
     "toast": {
@@ -1112,7 +1111,7 @@
       "modelSetup": {
         "planner": {
           "identifier": {
-            "label": "用于 规划思考 的模型",
+            "label": "Agent 决策模型",
             "description": "填写 API 服务商对应的模型标识，例如 deepseek-chat。"
           },
           "visual": {
@@ -1121,7 +1120,7 @@
         },
         "replyer": {
           "identifier": {
-            "label": "用于 回复发言 的模型",
+            "label": "Agent 回复模型",
             "description": "填写 API 服务商对应的模型标识，例如 deepseek-chat。"
           },
           "visual": {
@@ -1252,9 +1251,7 @@
       "model": "麦麦模型配置",
       "modelDesc": "配置模型参数",
       "emoji": "表情包",
-      "expression": "表达方式",
-      "learningDesc": "管理麦麦学习到的表达方式、黑话和表情包",
-      "expressionDesc": "管理麦麦的表达方式",
+      "learningDesc": "管理麦麦学习到的黑话和表情包",
       "person": "人物信息管理",
       "personDesc": "管理人物信息",
       "jargon": "黑话",
@@ -1577,12 +1574,11 @@
       "title": "快速操作",
       "restart": "重启麦麦",
       "restarting": "重启中...",
-      "expressionReview": "表达审核",
       "viewLogs": "查看日志",
       "chat": "麦麦聊聊",
       "docs": "前往文档",
-      "replyerLogs": "回复日志",
-      "plannerLogs": "规划日志",
+      "replyerLogs": "Agent 回复日志",
+      "plannerLogs": "Agent 决策日志",
       "reasoningLogs": "推理日志",
       "pluginManage": "插件管理",
       "systemSettings": "WEBUI设置",
@@ -1594,19 +1590,17 @@
       "modelTasks": "模型功能分配",
       "botConfig": "主程序配置",
       "emojiManagement": "表情包管理",
-      "expressionManagement": "表达方式管理",
       "statistics": "详细统计数据",
       "customize": "自定义",
       "empty": "还没有选择快捷入口",
       "add": "添加入口",
       "descriptions": {
         "restart": "重启麦麦主程序",
-        "expressionReview": "打开表达学习审核弹窗",
         "viewLogs": "查看 WebUI 日志",
         "chat": "打开麦麦聊天",
         "docs": "打开麦麦使用文档",
-        "replyerLogs": "查看回复阶段的推理记录",
-        "plannerLogs": "查看规划阶段的推理记录",
+        "replyerLogs": "查看 Agent 回复的推理记录",
+        "plannerLogs": "查看 Agent 决策的推理记录",
         "reasoningLogs": "打开推理日志",
         "configSection": "打开主程序配置 / {{section}}",
         "pluginManage": "打开插件市场与插件管理",
@@ -1619,7 +1613,6 @@
         "modelTasks": "打开模型管理 / 为模型分配功能",
         "botConfig": "打开麦麦主程序配置",
         "emojiManagement": "打开表情包资源管理",
-        "expressionManagement": "打开表达方式管理",
         "statistics": "打开 maibot_statistics.html"
       },
       "categories": {

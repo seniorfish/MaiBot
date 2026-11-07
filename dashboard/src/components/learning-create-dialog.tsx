@@ -17,17 +17,9 @@ import {
 import { Label } from '@/components/ui/label'
 import { MultiSelect } from '@/components/ui/multi-select'
 import { Progress } from '@/components/ui/progress'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 import { formatChatDisplayName } from '@/lib/chat-display'
-import { getExpressionChatTargets } from '@/lib/expression-api'
 import { getJargonChatList } from '@/lib/jargon-api'
 import {
   extractTextCandidates,
@@ -49,7 +41,7 @@ interface LearningCreateDialogProps {
 
 type ChunkState = { status: 'pending' | 'succeeded' | 'failed'; error?: string }
 
-/** 表达和黑话共用新增入口；各段独立记录结果，用户可随时确认已学到的候选。 */
+/** 黑话新增入口；各段独立记录结果，用户可随时确认已学到的候选。 */
 export function LearningCreateDialog({
   open,
   onOpenChange,
@@ -84,7 +76,7 @@ export function LearningCreateDialog({
     []
   )
   const { toast } = useToast()
-  const noun = kind === 'expression' ? '表达方式' : '黑话'
+  const noun = '黑话'
   const failedIndices = chunkStates.flatMap((chunk, index) =>
     chunk.status === 'failed' ? [index] : []
   )
@@ -95,15 +87,10 @@ export function LearningCreateDialog({
     queryKey: ['text-learning', 'targets', kind],
     enabled: open && mode === 'auto',
     queryFn: async () =>
-      kind === 'expression'
-        ? (await getExpressionChatTargets()).map((chat) => ({
-            value: chat.chat_id,
-            label: formatChatDisplayName(chat.chat_name, chat.account_id),
-          }))
-        : (await getJargonChatList({ include_empty: true })).data.map((chat) => ({
-            value: chat.session_id,
-            label: formatChatDisplayName(chat.chat_name, chat.account_id),
-          })),
+      (await getJargonChatList({ include_empty: true })).data.map((chat) => ({
+        value: chat.session_id,
+        label: formatChatDisplayName(chat.chat_name, chat.account_id),
+      })),
   })
   const targets = targetQuery.data ?? []
   const validTargetIds = targetIds.filter((id) => targets.some((target) => target.value === id))
@@ -155,9 +142,9 @@ export function LearningCreateDialog({
         setActiveChunkIndex(index)
         try {
           const extracted = parts[index].trim()
-            ? await extractTextCandidates(kind, parts[index])
+            ? await extractTextCandidates(parts[index])
             : []
-          const merged = mergeLearningCandidates(collected, extracted, kind)
+          const merged = mergeLearningCandidates(collected, extracted)
           const previousCount = collected.length
           setSelected((previous) => {
             const next = new Set(previous)
@@ -198,7 +185,6 @@ export function LearningCreateDialog({
     setError('')
     try {
       const result = await importLearningCandidates(
-        kind,
         isGlobal ? [] : validTargetIds,
         selectedIndices.map((index) => editedCandidates[index]),
         isGlobal
@@ -277,9 +263,7 @@ export function LearningCreateDialog({
                 <BookOpen className="text-muted-foreground h-6 w-6" />
                 <span className="font-medium">自动学习</span>
                 <span className="text-muted-foreground text-sm">
-                  {kind === 'expression'
-                    ? '适用于从文段中总结可用的表达'
-                    : '适用于从文段中总结黑话及其含义'}
+                  适用于从文段中总结黑话及其含义
                 </span>
               </button>
             </div>
@@ -365,33 +349,14 @@ export function LearningCreateDialog({
                     ) : (
                       <>
                         <Label htmlFor={`${kind}-learning-target`}>导入到聊天</Label>
-                        {kind === 'expression' ? (
-                          <Select
-                            value={validTargetIds[0] ?? ''}
-                            onValueChange={(id) => setTargetIds([id])}
-                            disabled={importing}
-                          >
-                            <SelectTrigger id={`${kind}-learning-target`}>
-                              <SelectValue placeholder="选择关联的聊天" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {targets.map((target) => (
-                                <SelectItem key={target.value} value={target.value}>
-                                  {target.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <MultiSelect
-                            options={targets}
-                            selected={validTargetIds}
-                            onChange={setTargetIds}
-                            placeholder="选择关联的聊天"
-                            emptyText="没有可选聊天"
-                            disabled={importing}
-                          />
-                        )}
+                        <MultiSelect
+                          options={targets}
+                          selected={validTargetIds}
+                          onChange={setTargetIds}
+                          placeholder="选择关联的聊天"
+                          emptyText="没有可选聊天"
+                          disabled={importing}
+                        />
                         {targetQuery.isPending && (
                           <p className="text-muted-foreground text-xs">正在加载聊天列表…</p>
                         )}
@@ -443,7 +408,6 @@ export function LearningCreateDialog({
                         key={index}
                         candidate={candidate}
                         index={index}
-                        kind={kind}
                         selected={!importedIndices?.has(index) && selected.has(index)}
                         imported={importedIndices?.has(index) === true}
                         importing={importing}

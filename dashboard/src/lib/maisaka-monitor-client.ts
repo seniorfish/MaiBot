@@ -47,6 +47,12 @@ export interface StageStatusEvent {
   round_text: string
   agent_state: string
   wait_until?: number | null
+  /** 当前待处理事件数；旧版后端可能推送 null */
+  event_queue_size?: number | null
+  /** Agent 是否处于待机（sleep）状态；旧版后端可能推送 null */
+  sleeping?: boolean | null
+  /** 定时唤醒时间戳（秒）；旧版后端可能推送 null */
+  sleep_until?: number | null
   stage_started_at: number
   updated_at: number
   timestamp: number

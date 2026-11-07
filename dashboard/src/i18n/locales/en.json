@@ -88,7 +88,6 @@
       "promptManagement": "Prompt Management",
       "emojiManagement": "Emoji Management",
       "learning": "Learning",
-      "expressionManagement": "Expression Management",
       "slangManagement": "Slang Management",
       "personInfo": "Person Info",
       "knowledgeGraph": "Long-Term Memory Graph",
@@ -262,7 +261,7 @@
       "stop": "Stop sandbox",
       "restart": "Rebuild sandbox",
       "refresh": "Refresh",
-      "help": "The internal Planner, sub-agents and external Agent share this computer. Take control to click, right-click and type. Taking control cancels in-flight operations and blocks autonomous input; pausing input leaves submitted operations running.",
+      "help": "The built-in Agent, sub-agents and external Agent share this computer. Take control to click, right-click and type. Taking control cancels in-flight operations and blocks autonomous input; pausing input leaves submitted operations running.",
       "screen": "Computer desktop",
       "text": "Type after taking control",
       "type": "Type text",
@@ -896,7 +895,7 @@
       },
       "modelSetup": {
         "title": "Model Setup",
-        "description": "Configure planner and replyer models"
+        "description": "Configure the Agent decision and reply models"
       }
     },
     "loading": {
@@ -918,8 +917,8 @@
       "enterProviderName": "Please enter an API provider name",
       "enterBaseUrl": "Please enter the API base URL",
       "enterApiKey": "Please enter the API key",
-      "enterPlannerModelIdentifier": "Please enter the planner model identifier",
-      "enterReplyerModelIdentifier": "Please enter the replyer model identifier",
+      "enterPlannerModelIdentifier": "Please enter the Agent decision model identifier",
+      "enterReplyerModelIdentifier": "Please enter the Agent reply model identifier",
       "customTokenInvalid": "Token does not meet the requirements: {{failedRules}}"
     },
     "toast": {
@@ -1112,7 +1111,7 @@
       "modelSetup": {
         "planner": {
           "identifier": {
-            "label": "planner Model Identifier *",
+            "label": "Agent Decision Model Identifier *",
             "description": "The real model ID provided by the API service; the model name will be initialized from it"
           },
           "visual": {
@@ -1121,7 +1120,7 @@
         },
         "replyer": {
           "identifier": {
-            "label": "replyer Model Identifier *",
+            "label": "Agent Reply Model Identifier *",
             "description": "The real model ID provided by the API service; the model name will be initialized from it"
           },
           "visual": {
@@ -1253,9 +1252,7 @@
       "model": "Model Config",
       "modelDesc": "Configure model parameters",
       "emoji": "Emoji Management",
-      "expression": "Expression Management",
-      "learningDesc": "Manage learned expressions, slang and emoji",
-      "expressionDesc": "Manage bot expressions",
+      "learningDesc": "Manage learned slang and emoji",
       "person": "Person Info",
       "personDesc": "Manage person info",
       "jargon": "Slang Management",
@@ -1580,12 +1577,11 @@
       "title": "Quick Actions",
       "restart": "Restart MaiBot",
       "restarting": "Restarting...",
-      "expressionReview": "Expression Review",
       "viewLogs": "View Logs",
       "chat": "Chat with MaiBot",
       "docs": "Documentation",
-      "replyerLogs": "Reply logs",
-      "plannerLogs": "Planner logs",
+      "replyerLogs": "Agent reply logs",
+      "plannerLogs": "Agent decision logs",
       "reasoningLogs": "Reasoning logs",
       "pluginManage": "Plugins",
       "systemSettings": "WebUI Settings",
@@ -1597,19 +1593,17 @@
       "modelTasks": "Model Tasks",
       "botConfig": "Core Config",
       "emojiManagement": "Emoji Management",
-      "expressionManagement": "Expression Management",
       "statistics": "Detailed Statistics",
       "customize": "Customize",
       "empty": "No quick shortcuts selected yet",
       "add": "Add Shortcut",
       "descriptions": {
         "restart": "Restart the MaiBot core process",
-        "expressionReview": "Open the expression learning review dialog",
         "viewLogs": "View WebUI logs",
         "chat": "Open MaiBot chat",
         "docs": "Open MaiBot documentation",
-        "replyerLogs": "View reply stage records",
-        "plannerLogs": "View planner stage records",
+        "replyerLogs": "View Agent reply stage records",
+        "plannerLogs": "View Agent decision stage records",
         "reasoningLogs": "Open reasoning logs",
         "configSection": "Open bot configuration / {{section}}",
         "pluginManage": "Open the plugin marketplace and management page",
@@ -1622,7 +1616,6 @@
         "modelTasks": "Open Model Management / Task assignments",
         "botConfig": "Open MaiBot core configuration",
         "emojiManagement": "Open emoji resource management",
-        "expressionManagement": "Open expression management",
         "statistics": "Open maibot_statistics.html"
       },
       "categories": {

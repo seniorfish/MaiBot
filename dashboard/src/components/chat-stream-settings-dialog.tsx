@@ -63,7 +63,7 @@ import {
 } from '@/lib/chat-management-api'
 import { cn } from '@/lib/utils'
 
-type LearningKind = 'expression' | 'jargon'
+type LearningKind = 'jargon'
 
 function formatRuleTarget(rule: ChatConfigRule | null): string {
   if (!rule) {
@@ -896,7 +896,6 @@ function ChatPromptSection({ detail }: { detail: ChatStreamDetail }) {
 
 function ConfigStatusRows({ detail }: { detail: ChatStreamDetail }) {
   const configRows = [
-    { kind: 'expression' as const, title: '表达', status: detail.expression },
     { kind: 'jargon' as const, title: '黑话', status: detail.jargon },
   ]
 
@@ -1281,7 +1280,7 @@ function DeleteChatStreamDialog({
               <div className="text-destructive font-medium">将被清理的数据包括：</div>
               <ul className="text-muted-foreground mt-2 list-disc space-y-1 pl-5">
                 <li>聊天流记录和该 session_id 下的所有消息。</li>
-                <li>表达学习、黑话关联、工具调用记录。</li>
+                <li>黑话关联、工具调用记录。</li>
                 <li>消息统计、高频词等以该聊天流为归属的数据。</li>
               </ul>
             </div>

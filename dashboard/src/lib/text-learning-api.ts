@@ -1,8 +1,7 @@
 import { backendApi } from '@/lib/http'
-import { importExpressions } from '@/lib/expression-api'
 import { importJargons } from '@/lib/jargon-api'
 
-export type LearningKind = 'expression' | 'jargon'
+export type LearningKind = 'jargon'
 
 export interface LearnedCandidate {
   title: string
@@ -18,14 +17,11 @@ export async function prepareLearningText(text: string): Promise<string[]> {
   return result.chunks
 }
 
-export async function extractTextCandidates(
-  kind: LearningKind,
-  text: string
-): Promise<LearnedCandidate[]> {
+export async function extractTextCandidates(text: string): Promise<LearnedCandidate[]> {
   const result = await backendApi.post<{ candidates: LearnedCandidate[] }>(
     '/api/webui/learning/text/extract',
     {
-      body: { kind, text },
+      body: { kind: 'jargon', text },
       errorMessage: '文段学习失败',
     }
   )
@@ -35,15 +31,10 @@ export async function extractTextCandidates(
 /** 跨段去重，保持候选顺序和勾选项稳定；同一黑话只展示一次。 */
 export function mergeLearningCandidates(
   current: LearnedCandidate[],
-  incoming: LearnedCandidate[],
-  kind: LearningKind
+  incoming: LearnedCandidate[]
 ): LearnedCandidate[] {
   const keyOf = (candidate: LearnedCandidate) =>
-    JSON.stringify(
-      kind === 'jargon'
-        ? [candidate.title.trim().toLocaleLowerCase()]
-        : [candidate.title.trim(), candidate.description.trim()]
-    )
+    JSON.stringify([candidate.title.trim().toLocaleLowerCase()])
   const seen = new Set(current.map(keyOf))
   return [
     ...current,
@@ -58,7 +49,6 @@ export function mergeLearningCandidates(
 
 /** 仅导入用户明确勾选的候选，冲突沿用现有导入接口的跳过策略。 */
 export async function importLearningCandidates(
-  kind: LearningKind,
   targetIds: string[],
   candidates: LearnedCandidate[],
   isGlobal = false
@@ -73,23 +63,7 @@ export async function importLearningCandidates(
     evidence: candidate.evidence?.trim(),
   }))
   if (items.some((item) => !item.title || !item.description))
-    throw new Error('请填写所选结果的内容和含义或表达')
-  if (kind === 'expression') {
-    if (!isGlobal && targetIds.length !== 1) throw new Error('表达方式请选择一个目标聊天')
-    return importExpressions({
-      ...(isGlobal ? { is_global: true } : { chat_id: targetIds[0] }),
-      expressions: items.map((candidate) => ({
-        situation: candidate.title,
-        style: candidate.description,
-        content_list: JSON.stringify(candidate.evidence ? [candidate.evidence] : []),
-        count: 1,
-        last_active_time: null,
-        create_time: null,
-        checked: true,
-        modified_by: 'user',
-      })),
-    })
-  }
+    throw new Error('请填写所选结果的内容和含义')
   return importJargons({
     target_session_ids: targetIds,
     ...(isGlobal ? { is_global: true } : {}),

@@ -78,12 +78,11 @@ import type {
   MessageSentEvent,
   PlannerFinalizedEvent,
   PlannerResponseEvent,
-  ReplierResponseEvent,
   TimingGateResultEvent,
   ToolExecutionEvent,
 } from '@/lib/maisaka-monitor-client'
 import type { SessionInfo, StageStatusInfo, TimelineEntry } from './use-maisaka-monitor'
-import { StageStatusLabel } from './StageStatusLabel'
+import { StageStatusLabel, formatAgentStatusText } from './StageStatusLabel'
 import { TimelineScrollPosition } from './TimelineScrollPosition'
 import { getStageStatusLight } from './stage-status-light'
 import { ObservationHeader } from './ObservationHeader'
@@ -491,7 +490,7 @@ function MonitorStatsPanel({ stats }: { stats: MonitorStats }) {
         </>
       ) : (
         <p className="text-muted-foreground text-[11px] leading-5">
-          尚无 planner 请求数据，产生一次推理后展示上下文构成。
+          尚无 Agent 请求数据，产生一次推理后展示上下文构成。
         </p>
       )}
 
@@ -539,11 +538,9 @@ interface StageStatusPanelProps {
 
 interface ChatActiveContext {
   memory: string[]
-  expressions: string[]
   jargon: { name: string; meaning: string }[]
   tools: string[]
   runtime_active: boolean
-  replyer_timestamp: number | null
 }
 
 function ActiveContextPopover({ sessionId }: { sessionId: string | null }) {
@@ -583,7 +580,6 @@ function ActiveContextPopover({ sessionId }: { sessionId: string | null }) {
   const sections = context
     ? [
         { title: '上下文状态摘要', items: context.memory, emptyText: '当前上下文尚未进行压缩' },
-        { title: '表达方式', items: context.expressions, emptyText: '最近一次 Replyer 请求中未使用' },
         { title: '黑话', items: context.jargon.map((entry) => entry.name), emptyText: '当前上下文没有黑话参考' },
         { title: '激活的工具', items: context.tools, emptyText: '当前尚未激活工具' },
       ]
@@ -623,9 +619,6 @@ function ActiveContextPopover({ sessionId }: { sessionId: string | null }) {
                 )) : <p className="text-muted-foreground text-xs">{section.emptyText}</p>}
               </section>
             ))}
-            <p className="text-muted-foreground text-[11px]">
-              表达方式来自最近一次 Replyer 请求：{context.replyer_timestamp ? new Date(context.replyer_timestamp).toLocaleString() : '无记录'}
-            </p>
           </div>
         )}
       </PopoverContent>
@@ -718,7 +711,9 @@ function StageStatusContent({
   status: StageStatusInfo
   floating?: boolean
 }) {
-  const agentStateLabel = getAgentStateLabel(status.agentState)
+  // 新字段已经用「待机中」表达 sleep 状态，避免再叠加旧文案「等待中」。
+  const agentStateLabel =
+    status.sleeping === true ? null : getAgentStateLabel(status.agentState)
   return (
     <>
       <div className="flex flex-wrap items-center gap-1.5 text-xs">
@@ -739,8 +734,8 @@ function StageStatusContent({
         </span>
       </div>
       {status.detail && (
-        <p className="text-muted-foreground max-w-72 text-xs break-words" title={status.detail}>
-          {status.detail}
+        <p className="text-muted-foreground max-w-72 text-xs break-words" title={formatAgentStatusText(status.detail)}>
+          {formatAgentStatusText(status.detail)}
         </p>
       )}
     </>
@@ -1137,7 +1132,7 @@ function PlannerInterruptedCard({ data }: { data: PlannerFinalizedEvent }) {
     <div className="rounded-md border border-amber-500/35 bg-amber-500/5 px-3 py-2">
       <div className="flex items-center gap-2 text-sm">
         <AlertCircle className="h-4 w-4 shrink-0 text-amber-500" />
-        <span className="font-medium">Planner 被新消息打断</span>
+        <span className="font-medium">Agent 被新消息打断</span>
         <EventTimestamp startedAt={data.planner_started_at} endedAt={data.planner_ended_at} />
         <Badge variant="outline" className="ml-auto text-[10px]">
           #{data.cycle_id}
@@ -1147,7 +1142,7 @@ function PlannerInterruptedCard({ data }: { data: PlannerFinalizedEvent }) {
         )}
       </div>
       <p className="text-muted-foreground mt-1 text-sm">
-        {planner?.content || '收到新消息，已停止当前思考并准备重新决策。'}
+        {formatAgentStatusText(planner?.content || '收到新消息，已停止当前思考并准备重新决策。')}
       </p>
     </div>
   )
@@ -1161,7 +1156,7 @@ function PlannerResponseCard({ data }: { data: PlannerResponseEvent }) {
       </div>
       <div className="min-w-0 flex-1">
         <div className="mb-1 flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium">规划器思考</span>
+          <span className="text-sm font-medium">Agent 思考</span>
           <EventTimestamp timestamp={data.timestamp} durationMs={data.duration_ms} />
           <span className="text-muted-foreground text-xs">{formatMs(data.duration_ms)}</span>
           <Badge variant="outline" className="text-[10px]">
@@ -1204,7 +1199,7 @@ function PlannerFinalizedCard({
     >
       <div className="space-y-2">
         <div data-maisaka-trace-meta="true" className="flex flex-wrap items-center gap-2">
-          <CardTitle className="text-sm font-medium">Planner</CardTitle>
+          <CardTitle className="text-sm font-medium">Agent</CardTitle>
           <ModelNameBadge modelName={planner?.model_name} />
           {data.request && (
             <span className="text-muted-foreground text-xs">
@@ -2062,57 +2057,6 @@ function CollapsibleText({
   )
 }
 
-// ─── 回复器响应卡片 ──────────────────────────────────────────
-
-function ReplierResponseCard({ data }: { data: ReplierResponseEvent }) {
-  return (
-    <TraceStep data-maisaka-trace-card="true" tone="tool">
-      <div className="space-y-2">
-        <div data-maisaka-trace-meta="true" className="flex items-center gap-2">
-          <Bot className="h-4 w-4 text-purple-500" />
-          <CardTitle className="text-sm font-medium">回复器响应</CardTitle>
-          <Badge variant="outline" className="ml-auto text-xs font-normal">
-            {formatMs(data.duration_ms)}
-          </Badge>
-          {data.success ? (
-            <Badge variant="secondary" className="gap-1 text-xs">
-              <CheckCircle2 className="h-3 w-3" /> 成功
-            </Badge>
-          ) : (
-            <Badge variant="destructive" className="gap-1 text-xs">
-              <XCircle className="h-3 w-3" /> 失败
-            </Badge>
-          )}
-          <EventTimestamp timestamp={data.timestamp} durationMs={data.duration_ms} />
-        </div>
-        {data.content && (
-          <CollapsibleText text={data.content} maxLines={6} className="text-foreground/90" />
-        )}
-        {data.reasoning && (
-          <details className="mt-1">
-            <summary className="text-muted-foreground hover:text-foreground cursor-pointer text-xs">
-              思考过程
-            </summary>
-            <CollapsibleText
-              text={data.reasoning}
-              maxLines={8}
-              className="text-muted-foreground mt-1"
-            />
-          </details>
-        )}
-        {(data.prompt_tokens > 0 || data.completion_tokens > 0) && (
-          <div className="text-muted-foreground mt-1 flex gap-3 text-xs">
-            {data.model_name && <span>模型: {data.model_name}</span>}
-            <span>输入: {data.prompt_tokens}</span>
-            <span>输出: {data.completion_tokens}</span>
-            <span>总计: {data.total_tokens}</span>
-          </div>
-        )}
-      </div>
-    </TraceStep>
-  )
-}
-
 // 常规流程提示不占时间线行；实际消息、思考轮次和上下文裁切已有独立展示。
 const HIDDEN_FLOW_STEPS = new Set([
   'planner.requested', 'wait.completed', 'cycle.finishing', 'messages.merged', 'cycle.started',
@@ -2134,11 +2078,14 @@ function FlowStepRow({
   compact?: boolean
   twoLine?: boolean
 }) {
+  // 流程标题/说明来自后端，可能仍带旧的 Planner/Replyer 字样。
+  const displayTitle = formatAgentStatusText(title)
+  const displayDetail = formatAgentStatusText(detail)
   if (compact) {
     return (
       <div className="text-muted-foreground flex items-center gap-3 py-1 text-[11px]">
         <span aria-hidden="true" className="border-border/60 min-w-0 flex-1 border-t" />
-        <span className="shrink-0" title={detail}>{title}</span>
+        <span className="shrink-0" title={displayDetail}>{displayTitle}</span>
       </div>
     )
   }
@@ -2155,7 +2102,7 @@ function FlowStepRow({
         ) : (
           <Activity className="text-muted-foreground h-3.5 w-3.5" />
         )}
-        <span className={cn('font-medium', twoLine && 'min-w-0 truncate')} title={twoLine ? title : undefined}>{title}</span>
+        <span className={cn('font-medium', twoLine && 'min-w-0 truncate')} title={twoLine ? displayTitle : undefined}>{displayTitle}</span>
         {twoLine ? (
           <span className="text-muted-foreground shrink-0 opacity-65">{formatTimestamp(timestamp)}</span>
         ) : <EventTimestamp timestamp={timestamp} />}
@@ -2163,9 +2110,9 @@ function FlowStepRow({
       {detail && (
         <p
           className={cn('text-muted-foreground mt-1 text-xs leading-5', twoLine ? 'truncate' : 'break-words whitespace-pre-wrap')}
-          title={twoLine ? detail : undefined}
+          title={twoLine ? displayDetail : undefined}
         >
-          {detail}
+          {displayDetail}
         </p>
       )}
     </div>
@@ -2238,7 +2185,7 @@ function CollapsedPlannerToolSummary({ data, isProgress }: {
   const calls = new Map((data.planner?.tool_calls ?? []).map((tool) => [tool.id, tool.name]))
   for (const tool of results.values()) calls.set(tool.tool_call_id, tool.tool_name)
 
-  if (calls.size === 0) return <>{isProgress ? '进行中' : data.final_state.end_detail}</>
+  if (calls.size === 0) return <>{isProgress ? '进行中' : formatAgentStatusText(data.final_state.end_detail ?? '')}</>
 
   return (
     <span className="inline-flex max-w-full items-center gap-3 align-middle">
@@ -2330,7 +2277,7 @@ export function TimelineEventRenderer({
     case 'planner.finalized':
     case 'planner.progress': {
       const data = entry.data as PlannerFinalizedEvent
-      const endDetail = data.final_state.end_detail
+      const endDetail = formatAgentStatusText(data.final_state.end_detail ?? '')
       if (isPlannerInterrupted(data)) {
         return <PlannerInterruptedCard data={data} />
       }
@@ -2345,7 +2292,7 @@ export function TimelineEventRenderer({
             ? entry.type === 'planner.progress' ? '进行中' : undefined
             : <CollapsedPlannerToolSummary data={data} isProgress={entry.type === 'planner.progress'} />}
           metrics={data.planner && (
-            <span title={`Planner 输入 ${data.planner.prompt_tokens} + 输出 ${data.planner.completion_tokens} tokens`}>
+            <span title={`Agent 输入 ${data.planner.prompt_tokens} + 输出 ${data.planner.completion_tokens} tokens`}>
               {formatMs(data.planner.duration_ms)} · {data.planner.prompt_tokens + data.planner.completion_tokens} tok
             </span>
           )}
@@ -2377,8 +2324,7 @@ export function TimelineEventRenderer({
     }
     case 'tool.execution':
       return <ToolExecutionCard data={entry.data as ToolExecutionEvent} />
-    case 'replier.response':
-      return <ReplierResponseCard data={entry.data as ReplierResponseEvent} />
+    // 后端可能仍会推送旧的 replier.response 事件，这里直接忽略。
     // planner.request, replier.request 和 session.start 通常不需要在 timeline 中主要展示
     default:
       return null
@@ -2644,8 +2590,7 @@ const MonitorTimeline = memo(function MonitorTimeline({
         entry.type === 'flow.step' ||
         entry.type === 'llm.retry' ||
         entry.type === 'llm.error' ||
-        entry.type === 'tool.execution' ||
-        entry.type === 'replier.response'
+        entry.type === 'tool.execution'
       ) {
         visibleEntries.push(entry)
       }
