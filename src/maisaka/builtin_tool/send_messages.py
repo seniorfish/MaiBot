@@ -132,6 +132,24 @@ async def _record_sent_messages(key: Tuple[str, str], texts: List[str]) -> None:
             _recent_texts[key] = recent
 
 
+# Failures that retrying cannot fix: the platform refuses this target outright.
+_PERMANENT_SEND_FAILURES = (
+    "请先添加对方为好友",
+    "未找到聊天流",
+    "not friend",
+    "not a friend",
+    "已被对方拉黑",
+    "被禁言",
+)
+
+
+def _is_permanent_send_failure(reason: str) -> bool:
+    """True when the platform rejected the target itself, not the attempt."""
+
+    text = str(reason or "").lower()
+    return any(marker in text for marker in _PERMANENT_SEND_FAILURES)
+
+
 def get_tool_spec() -> ToolSpec:
     """Return the tool declaration for send_messages."""
 
@@ -294,7 +312,10 @@ async def handle_tool(
                 message_failed = True
                 break
             if sent is None:
-                send_results.append({"index": len(send_results), "success": False, "error": "发送失败"})
+                # The send chain collapses every failure into None; ask it for
+                # the platform's own reason so the model is not left guessing.
+                failure_reason = send_service.take_last_send_error(target_session_id) or "发送失败"
+                send_results.append({"index": len(send_results), "success": False, "error": failure_reason})
                 message_failed = True
                 break
             message_id = str(getattr(sent, "message_id", "") or "")
@@ -317,10 +338,17 @@ async def handle_tool(
             ),
             "",
         )
+        retryable = not _is_permanent_send_failure(reason)
+        hint = "" if retryable else "这是永久性失败，换写法或换工具都不会成功，请直接结束本轮。"
         return tool_ctx.build_failure_result(
             invocation.tool_name,
-            f"消息未能发送：{reason}" if reason else "消息未能发送：没有一条成功，请检查内容和附件参数后重试。",
-            structured_content={"send_results": send_results},
+            (f"消息未能发送：{reason}{hint}" if reason else "消息未能发送：没有一条成功，请检查内容和附件参数后重试。"),
+            structured_content={
+                "send_results": send_results,
+                "reason": reason,
+                "retryable": retryable,
+                "hint": hint,
+            },
         )
 
     runtime.record_planner_reply()

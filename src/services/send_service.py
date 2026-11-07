@@ -47,6 +47,17 @@ from src.plugin_runtime.host.hook_spec_registry import HookSpec, HookSpecRegistr
 
 logger = get_logger("send_service")
 
+# Why the most recent platform delivery failed, keyed by session id. The send
+# chain collapses every failure into ``None``; without this the caller can only
+# report a bare "发送失败" and the agent retries the same doomed message.
+_last_send_errors: Dict[str, str] = {}
+
+
+def take_last_send_error(session_id: str) -> str:
+    """Return and clear the recorded platform failure reason for a session."""
+
+    return _last_send_errors.pop(str(session_id or ""), "")
+
 
 def register_send_service_hook_specs(registry: HookSpecRegistry) -> List[HookSpec]:
     """注册发送服务内置 Hook 规格。
@@ -829,11 +840,12 @@ def _sync_sent_message_to_maisaka_history(
         logger.warning(f"[SendService] 同步消息到 Maisaka 历史失败: session_id={session_id} error={exc}")
 
 
-def _log_platform_io_failures(delivery_batch: DeliveryBatch) -> None:
-    """输出 Platform IO 批量发送失败详情。
+def _log_platform_io_failures(delivery_batch: DeliveryBatch, session_id: str = "") -> None:
+    """输出 Platform IO 批量发送失败详情，并记录原因供调用方取用。
 
     Args:
         delivery_batch: Platform IO 返回的批量回执。
+        session_id: 失败所属的会话，用于让上层报告真实原因。
     """
     failed_details = (
         "; ".join(
@@ -842,6 +854,8 @@ def _log_platform_io_failures(delivery_batch: DeliveryBatch) -> None:
         )
         or "未命中任何发送路由"
     )
+    if session_id:
+        _last_send_errors[str(session_id)] = failed_details
     logger.warning(f"[SendService] Platform IO 发送失败: platform={delivery_batch.route_key.platform} {failed_details}")
 
 
@@ -968,7 +982,7 @@ async def _send_via_platform_io(
             )
         return message
 
-    _log_platform_io_failures(delivery_batch)
+    _log_platform_io_failures(delivery_batch, str(message.session_id or ""))
     return None
 
 
