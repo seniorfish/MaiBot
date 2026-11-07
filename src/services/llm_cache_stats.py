@@ -16,10 +16,9 @@ from src.common.logger import get_logger
 
 logger = get_logger("llm_cache_stats")
 
-FOCUSED_TASK_NAMES = {"replyer", "planner"}
+FOCUSED_TASK_NAMES = {"planner"}
 EXCLUDED_REQUEST_TYPES = {
     "A_Memorix.ChatSummarization",
-    "expression.learner",
     "jargon.learner",
     "reply.effect_judge",
 }

@@ -308,7 +308,14 @@ class ToolRegistry:
         """声明与执行共用名称分配规则，不修改 Provider 持有的原始声明。"""
         entries: List[Tuple[ToolProvider, ToolSpec]] = []
         for provider in self._providers:
-            entries.extend((provider, spec) for spec in await provider.list_tools(context) if spec.enabled)
+            try:
+                provider_specs = await provider.list_tools(context)
+            except Exception:
+                # One broken provider (bad schema, IPC failure) must not take the
+                # whole agent offline; the full traceback is logged for fixing.
+                logger.exception(f"工具 Provider 声明失败，已跳过: provider={provider.provider_name}")
+                continue
+            entries.extend((provider, spec) for spec in provider_specs if spec.enabled)
         reserved_names = {spec.name for _, spec in entries}
         routes: Dict[str, Tuple[ToolProvider, ToolSpec]] = {}
         for provider, original in entries:

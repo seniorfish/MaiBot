@@ -1,5 +1,6 @@
 """Maisaka 聊天历史视觉占位刷新器。"""
 
+from datetime import datetime
 from typing import Awaitable, Callable, Optional
 
 from sqlmodel import select
@@ -20,6 +21,10 @@ logger = get_logger("maisaka_chat_history_visual_refresher")
 
 BuildHistoryMessage = Callable[[SessionMessage, str], Awaitable[Optional[LLMContextMessage]]]
 BuildVisibleText = Callable[[SessionMessage, str], str]
+
+# Emoji descriptions cannot be probed from the database reliably, so waiting on them is
+# bounded by message age to avoid stalling every request when a recognition never lands.
+_EMOJI_RECOGNITION_WAIT_SECONDS = 90.0
 
 _PLANNER_PENDING_IMAGE_HASHES: set[str] = set()
 _MONITOR_PENDING_IMAGE_REFRESHERS: dict[str, list[Callable[[str], None]]] = {}
@@ -83,6 +88,7 @@ def has_pending_image_recognition(chat_history: list[LLMContextMessage]) -> bool
     if not _is_vlm_task_configured():
         return False
 
+    now = datetime.now()
     for history_message in chat_history:
         if not isinstance(history_message, ContentContextMessage):
             continue
@@ -90,6 +96,8 @@ def has_pending_image_recognition(chat_history: list[LLMContextMessage]) -> bool
         components = history_message.media_sequence.components
 
         if _has_pending_image_component(components):
+            return True
+        if _is_recent_message(history_message, now) and _has_pending_emoji_component(components):
             return True
 
     return False
@@ -174,6 +182,42 @@ def _has_pending_image_component(components: list[object]) -> bool:
                 return True
 
     return False
+
+
+def _has_pending_emoji_component(components: list[object]) -> bool:
+    for component in components:
+        if isinstance(component, EmojiComponent):
+            if _should_refresh_emoji_component(component) and _is_emoji_component_pending(component):
+                return True
+            continue
+
+        if not isinstance(component, ForwardNodeComponent):
+            continue
+
+        for forward_component in component.forward_components:
+            if _has_pending_emoji_component(forward_component.content):
+                return True
+
+    return False
+
+
+def _is_recent_message(history_message: ContentContextMessage, now: datetime) -> bool:
+    """表情识别没有数据库落点做收敛判据，只对刚收到的消息等待。"""
+
+    timestamp = getattr(history_message, "timestamp", None)
+    if timestamp is None:
+        return False
+    try:
+        reference = datetime.now(timestamp.tzinfo) if timestamp.tzinfo is not None else now
+        return (reference - timestamp).total_seconds() <= _EMOJI_RECOGNITION_WAIT_SECONDS
+    except (TypeError, ValueError, OverflowError):
+        return False
+
+
+def _is_emoji_component_pending(component: EmojiComponent) -> bool:
+    if not component.binary_hash:
+        return False
+    return not _lookup_cached_emoji_description(component.binary_hash)
 
 
 def _collect_pending_image_hashes(components: list[object]) -> list[str]:

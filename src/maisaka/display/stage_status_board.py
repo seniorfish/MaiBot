@@ -26,6 +26,9 @@ class MaisakaStageStatusBoard:
         round_text: str = "",
         agent_state: str = "",
         wait_until: float | None = None,
+        event_queue_size: int | None = None,
+        sleeping: bool | None = None,
+        sleep_until: float | None = None,
     ) -> None:
         """更新一个会话的阶段状态。"""
 
@@ -45,6 +48,9 @@ class MaisakaStageStatusBoard:
                 "round_text": round_text,
                 "agent_state": agent_state,
                 "wait_until": wait_until,
+                "event_queue_size": event_queue_size,
+                "sleeping": sleeping,
+                "sleep_until": sleep_until,
                 "stage_started_at": stage_started_at,
                 "updated_at": now,
                 "timestamp": now,
@@ -103,6 +109,9 @@ def update_stage_status(
     round_text: str = "",
     agent_state: str = "",
     wait_until: float | None = None,
+    event_queue_size: int | None = None,
+    sleeping: bool | None = None,
+    sleep_until: float | None = None,
 ) -> None:
     """更新 WebUI 麦麦观察中的阶段状态。"""
 
@@ -114,6 +123,9 @@ def update_stage_status(
         round_text=round_text,
         agent_state=agent_state,
         wait_until=wait_until,
+        event_queue_size=event_queue_size,
+        sleeping=sleeping,
+        sleep_until=sleep_until,
     )
 
 

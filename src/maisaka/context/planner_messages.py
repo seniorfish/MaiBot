@@ -11,6 +11,7 @@ from src.common.data_models.message_component_data_model import (
     ReplyComponent,
 )
 
+from src.maisaka.agent_core.user_alias import get_user_alias_book, short_person_id
 from src.maisaka.context.message_id_alias import to_display_message_id
 
 
@@ -21,6 +22,9 @@ def build_planner_prefix(
     group_card: str = "",
     message_id: Optional[str] = None,
     chat_id: Optional[str] = None,
+    chat_type: str = "",
+    uid: str = "",
+    alias: str = "",
     quote_ids: Optional[Sequence[str]] = None,
     include_message_id: bool = True,
     include_chat_id: bool = False,
@@ -34,6 +38,9 @@ def build_planner_prefix(
         group_card: 群昵称。
         message_id: 消息 ID。
         chat_id: 聊天流 ID。
+        chat_type: 会话类型（群聊 / 私聊），让模型不必靠昵称推断。
+        uid: 发送者的短稳定标识；同名不同人时用它区分，也可直接回传查询画像。
+        alias: 这个人在群里的常用名（群名片优先），私聊里用它才知道对方是谁。
         quote_ids: 被引用消息 ID 列表。
         include_message_id: 是否输出 `msg_id` 段。
         include_chat_id: 是否输出 `chat_id` 段。
@@ -55,6 +62,10 @@ def build_planner_prefix(
             if chat_name:
                 message_attrs.append(f'chat_name="{escape(chat_name, quote=True)}"')
 
+    normalized_chat_type = chat_type.strip()
+    if normalized_chat_type:
+        message_attrs.append(f'chat_type="{escape(normalized_chat_type, quote=True)}"')
+
     normalized_quote = _format_quote_ids(quote_ids)
     if normalized_quote:
         message_attrs.append(f'quote="{escape(normalized_quote, quote=True)}"')
@@ -69,6 +80,12 @@ def build_planner_prefix(
     normalized_group_card = group_card.strip()
     if normalized_group_card:
         message_attrs.append(f'group_card="{escape(normalized_group_card, quote=True)}"')
+    normalized_uid = uid.strip()
+    if normalized_uid:
+        message_attrs.append(f'uid="{escape(normalized_uid, quote=True)}"')
+    normalized_alias = alias.strip()
+    if normalized_alias and normalized_alias != user_name.strip():
+        message_attrs.append(f'alias="{escape(normalized_alias, quote=True)}"')
     if is_self_message:
         message_attrs.append('is_self_message="true"')
     return f"<message {' '.join(message_attrs)}>\n"
@@ -114,6 +131,7 @@ def build_planner_user_prefix_from_session_message(
     include_message_id: bool = True,
     include_chat_id: bool = False,
     is_self_message: bool = False,
+    chat_type: str = "",
 ) -> str:
     """根据真实会话消息构造规划器前缀。
 
@@ -122,6 +140,7 @@ def build_planner_user_prefix_from_session_message(
         include_message_id: 是否输出 `msg_id` 段。
         include_chat_id: 是否输出 `chat_id` 段。
         is_self_message: 是否显式标注这条消息是 bot 自己发送的。
+        chat_type: 会话类型（群聊 / 私聊）。
 
     Returns:
         str: 规划器前缀字符串。
@@ -129,12 +148,20 @@ def build_planner_user_prefix_from_session_message(
 
     user_info = message.message_info.user_info
     user_name = user_info.user_nickname or user_info.user_id
+    book = get_user_alias_book()
+    card_name = (user_info.user_cardname or "").strip()
+    if card_name:
+        book.observe(message.platform, user_info.user_id, card_name, authoritative=True)
+    book.observe(message.platform, user_info.user_id, user_info.user_nickname)
     return build_planner_prefix(
         timestamp=message.timestamp,
         user_name=user_name,
         group_card=user_info.user_cardname or "",
         message_id=message.message_id,
         chat_id=message.session_id,
+        chat_type=chat_type,
+        uid=short_person_id(message.platform, user_info.user_id),
+        alias=book.display_name(message.platform, user_info.user_id),
         quote_ids=extract_quote_ids_from_message_sequence(message.raw_message),
         include_message_id=include_message_id and not message.is_notify and bool(message.message_id),
         include_chat_id=include_chat_id,

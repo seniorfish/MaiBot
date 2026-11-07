@@ -1,4 +1,4 @@
-[reply_attachments]
-display_name = "답변 첨부 안내"
-advanced = true
-description = "답변에 첨부된 이미지, 멘션, 이모티콘은 시스템이 전송하며 본문에 첨부 정보를 중복하지 않도록 안내합니다."
+[agent_core]
+display_name = "Agent 코어"
+advanced = false
+description = "에이전트 전환 후의 메인 템플릿입니다. 인격과 말투를 통합하고, 무엇을 조회하고 무엇을 말하며 언제 sleep 할지를 모델이 스스로 결정합니다."

@@ -13,7 +13,6 @@ from src.chat.debounce.message_adapter import get_message_shape
 from src.chat.heart_flow.heartFC_utils import CycleDetail
 from src.chat.message_receive.chat_manager import BotChatSession, chat_manager
 from src.chat.message_receive.message import SessionMessage
-from src.chat.replyer.expression_vector_index import expression_vector_index
 from src.chat.utils.utils import is_bot_self, is_mentioned_bot_in_message
 from src.common.data_models.mai_message_data_model import GroupInfo, MessageInfo, UserInfo
 from src.common.data_models.message_component_data_model import (
@@ -24,7 +23,7 @@ from src.common.data_models.message_component_data_model import (
 )
 from src.common.logger import get_logger
 from src.common.message_repository import find_messages
-from src.common.utils.utils_config import ChatConfigUtils, ExpressionConfigUtils, JargonConfigUtils
+from src.common.utils.utils_config import ChatConfigUtils, JargonConfigUtils
 from src.config.config import global_config, model_config
 from src.agent.provider import AgentToolProvider
 from src.computer.provider import ComputerToolProvider
@@ -32,12 +31,17 @@ from src.files.provider import FileToolProvider
 from src.desktop_pet.chat_tools import ChatSessionToolProvider
 from src.desktop_pet.todo_tools import TodoToolProvider
 from src.core.tooling import ToolRegistry, ToolSpec
-from src.learners.expression_learner import ExpressionLearner
 from src.learners.jargon_learner import JargonLearner
 from src.learners.jargon_miner import JargonMiner
 from src.maisaka.quote import ReplyQuoteContext, ReplyQuoteCounter
 from src.llm_models.payload_content.resp_format import RespFormat
 from src.llm_models.payload_content.tool_option import ToolDefinitionInput
+from src.maisaka.agent_core import AgentLoop, AgentState, Event, EventKind, EventQueue
+from src.maisaka.agent_core.registry import get_agent_loop, get_agent_state, get_event_queue
+from src.maisaka.agent_core.user_alias import get_user_alias_book, short_person_id
+from src.maisaka.memory.person_profile import build_person_profile_injection_messages
+from src.maisaka.agent_core.state import EVENT_RECEIVED
+from src.maisaka.agent_core.store import AgentStateStore
 from src.maisaka.builtin_tool.provider import MaisakaBuiltinToolProvider
 from src.maisaka.context.clear_context import select_messages_after_latest_clear_marker
 from src.maisaka.context.history import drop_leading_orphan_tool_results
@@ -88,6 +92,9 @@ logger = get_logger("maisaka_runtime")
 MAX_INTERNAL_ROUNDS = 16
 MAX_RETAINED_MESSAGE_CACHE_SIZE = 200
 CONTEXT_RESTORE_FILL_RATIO = 0.5
+# Startup profile warm-up: people who spoke here in the last day.
+ACTIVE_PROFILE_WINDOW_SECONDS = 86400
+ACTIVE_PROFILE_SCAN_LIMIT = 200
 CONTEXT_RESTORE_SHORT_RESTART_SECONDS = 5 * 60
 CONTEXT_RESTORE_SHORT_OFFLINE_SECONDS = 30 * 60
 CONTEXT_RESTORE_LONG_SLEEP_SECONDS = 6 * 60 * 60
@@ -182,6 +189,7 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
         self._pending_wait_logical_turn_id: Optional[str] = None
         self._pending_wait_started_at: Optional[float] = None
         self._pending_wait_seconds: Optional[float] = None
+        self._last_trigger_events: List[Event] = []
         self._consecutive_wait_count = 0
         self._consecutive_idle_count = 0
         self._current_action_tool_names: set[str] = set()
@@ -189,10 +197,9 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
         self.deferred_tool_specs_by_name: dict[str, ToolSpec] = {}
 
         self._min_extraction_interval = 30
-        self._last_expression_extraction_time = 0.0
+        self._last_extraction_time = 0.0
         self._trimmed_history_learning_task: Optional[asyncio.Task[None]] = None
         self._queued_trimmed_learning_progress: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None
-        self._expression_learner = ExpressionLearner(session_id)
         self._jargon_learner = JargonLearner(session_id)
         self._jargon_miner = JargonMiner(session_id, session_name=session_name)
 
@@ -220,14 +227,6 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
             else global_config.chat.max_private_context_size
         )
         return max(1, int(configured_context_size))
-
-    @property
-    def _enable_expression_learning(self) -> bool:
-        """返回当前会话实时生效的表达学习开关。"""
-
-        _, enable_learning = ExpressionConfigUtils.get_expression_config_for_chat(self.session_id)
-        return enable_learning
-
 
     @property
     def _enable_jargon_learning(self) -> bool:
@@ -262,6 +261,16 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
                 and self._wait_timeout_task is not None and self._pending_wait_started_at is not None
                 and self._pending_wait_seconds is not None):
             wait_until = self._pending_wait_started_at + self._pending_wait_seconds
+        event_queue_size = None
+        sleeping = None
+        sleep_until = None
+        if global_config.agent_core.enabled:
+            loop = self._get_agent_loop()
+            if loop is not None:
+                event_queue_size = loop.pending_count()
+                wait = loop.state.wait
+                sleeping = wait is not None
+                sleep_until = wait.deadline if wait is not None and wait.seconds > 0 else None
         update_stage_status(
             session_id=self.session_id,
             session_name=self.session_name,
@@ -270,6 +279,9 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
             round_text=round_text,
             agent_state=self._agent_state,
             wait_until=wait_until,
+            event_queue_size=event_queue_size,
+            sleeping=sleeping,
+            sleep_until=sleep_until,
         )
 
     async def start(self) -> None:
@@ -282,6 +294,8 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
             await self._init_mcp()
 
         await self._restore_recent_context_from_db()
+        await self._restore_agent_core_state()
+        await self._inject_active_person_profiles()
         self._running = True
         if self._is_focus_mode_active_for_current_chat():
             await focus_mode_manager.attach(self)
@@ -289,29 +303,6 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
         self._schedule_message_turn()
         self._update_stage_status("空闲", "等待消息触发")
         logger.info(f"{self.log_prefix} Maisaka 运行时已启动")
-
-    async def build_retro_reply_history(self) -> List[LLMContextMessage]:
-        """独立读取复古回复窗口，避免 Planner 裁切缩短回复器的聊天记录。"""
-
-        context_limit = max(1, int(self._max_context_size * 0.6))
-        recent_messages = await asyncio.to_thread(
-            find_messages,
-            session_id=self.session_id,
-            limit=context_limit,
-            limit_mode="latest",
-        )
-        recent_messages = select_messages_after_latest_clear_marker(recent_messages)
-        history: List[LLMContextMessage] = []
-        for message in recent_messages:
-            if message.is_notify:
-                continue
-            history_message = await self._reasoning_engine._build_history_message(
-                message,
-                source_kind=self._resolve_restored_message_source_kind(message),
-            )
-            if history_message is not None:
-                history.append(history_message)
-        return history
 
     async def _restore_recent_context_from_db(self) -> None:
         """启动时从消息库恢复最近上下文，避免重启后丢失短期对话窗口。"""
@@ -371,6 +362,58 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
         """返回启动时最多回灌的真实消息数量。"""
 
         return max(1, ceil(self._max_context_size * CONTEXT_RESTORE_FILL_RATIO))
+
+    async def _inject_active_person_profiles(self) -> int:
+        """Warm the agent with profiles of people active in the last day.
+
+        The per-request injector only sees the current batch; this gives the
+        agent background on the people who were recently talking here, once
+        per scope, without repeating it on every request.
+        """
+
+        if not global_config.agent_core.enabled or not global_config.agent_core.profile_injection:
+            return 0
+        if not global_config.a_memorix.integration.enable_person_profile_injection:
+            return 0
+        try:
+            recent_messages = await asyncio.to_thread(
+                find_messages,
+                session_id=self.session_id,
+                start_time=time.time() - ACTIVE_PROFILE_WINDOW_SECONDS,
+                limit=ACTIVE_PROFILE_SCAN_LIMIT,
+                limit_mode="latest",
+            )
+        except Exception as exc:
+            logger.warning(f"{self.log_prefix} 读取近 24 小时活跃用户失败: {exc}")
+            return 0
+        recent_messages = select_messages_after_latest_clear_marker(recent_messages)
+        if not recent_messages:
+            return 0
+
+        scope_state = get_agent_state(self._agent_scope_id())
+        try:
+            blocks, injected = await build_person_profile_injection_messages(
+                anchor_message=recent_messages[-1],
+                pending_messages=recent_messages,
+                known_profiles=dict(scope_state.injected_profiles),
+            )
+        except Exception as exc:
+            logger.warning(f"{self.log_prefix} 启动人物画像注入失败: {exc}")
+            return 0
+        if not blocks:
+            return 0
+        scope_state.injected_profiles.update(injected)
+        for block in blocks:
+            self._chat_history.append(
+                ReferenceMessage(
+                    content=block,
+                    timestamp=datetime.now(),
+                    remaining_uses_value=None,
+                    display_prefix="[人物画像]",
+                )
+            )
+        logger.info(f"{self.log_prefix} 已注入近 24 小时活跃用户画像: 人数={len(injected)}")
+        return len(injected)
 
     async def restore_proactive_user_context(self) -> int:
         """主动回合前确保上下文含有可回复的真实用户消息。
@@ -560,6 +603,8 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
                 self._internal_loop_task = None
 
         await self._tool_registry.close()
+        # Persist last, so nothing enqueued during shutdown is lost from the snapshot.
+        await self._persist_agent_core_state()
         remove_stage_status(self.session_id)
 
         logger.info(f"{self.log_prefix} Maisaka 运行时已停止")
@@ -594,6 +639,8 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
                 group_card=user_info.user_cardname or "",
                 message_id=message.message_id,
                 chat_id=message.session_id,
+                chat_type="群聊" if self.chat_stream.is_group_session else "私聊",
+                uid=short_person_id(message.platform, user_info.user_id),
                 quote_ids=extract_quote_ids_from_message_sequence(message.raw_message),
                 include_message_id=not message.is_notify and bool(message.message_id),
                 include_chat_id=include_chat_id,
@@ -835,6 +882,19 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
         self._proactive_trigger_message = trigger_message
         self._proactive_logical_turn_id = logical_turn_id
         self._resume_from_wait_for_proactive_trigger()
+        loop = self._get_agent_loop() if hasattr(self, "_get_agent_loop") else None
+        if loop is not None:
+            loop.enqueue(
+                Event(
+                    kind=EventKind.PROACTIVE,
+                    scope_id=loop.scope_id,
+                    session_id=self.session_id,
+                    payload={"message_id": trigger_message.message_id},
+                    dedupe_key=f"proactive:{trigger_message.message_id}:{logical_turn_id or ''}",
+                    source="proactive",
+                )
+            )
+            return
         self._internal_turn_queue.put_nowait("proactive")
 
     def _consume_proactive_trigger_message(self) -> Optional[SessionMessage]:
@@ -1034,6 +1094,9 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
             if history_message is not None:
                 self._chat_history.append(history_message)
             await self._focus_group.register_message(self, message, history_message)
+            # Focus keeps its own scheduler; the event is used for interception and
+            # for the future unified loop.
+            self._enqueue_agent_event(message)
             return
         self._request_planner_interrupt_for_message(message)
         if self._running:
@@ -1043,6 +1106,104 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
         return focus_mode_manager.is_enabled_for_session(
             self.session_id, is_group_chat=self.chat_stream.is_group_session
         )
+
+    def _init_agent_core_state_if_enabled(self) -> None:
+        """Kept for callers that want to warm the shared scope state."""
+
+        if not global_config.agent_core.enabled:
+            return
+        scope_id = self._agent_scope_id()
+        get_event_queue(scope_id)
+        get_agent_state(scope_id)
+        self._get_agent_loop()
+
+    def _get_agent_loop(self) -> Optional[AgentLoop]:
+        """Return the scope loop; Focus members share the group's loop."""
+
+        if not global_config.agent_core.enabled:
+            return None
+        return get_agent_loop(self._agent_scope_id())
+
+    def _agent_scope_id(self) -> str:
+        """Normal chats are single-session scopes; Focus shares one scope."""
+
+        if self._is_focus_mode_active_for_current_chat():
+            return focus_mode_manager.get_focus_scope_key(self.session_id)
+        return self.session_id
+
+    def _enqueue_agent_event(self, message: SessionMessage) -> None:
+        """Mirror inbound messages into the scope-wide event queue.
+
+        Stage 1 keeps the legacy scheduler authoritative: events are collected
+        but not consumed yet. Self-originated messages only update history.
+        """
+
+        if not global_config.agent_core.enabled:
+            return
+        user_info = message.message_info.user_info
+        if is_bot_self(message.platform, user_info.user_id):
+            return
+        scope_id = self._agent_scope_id()
+        mentioned, _, _ = is_mentioned_bot_in_message(message)
+        event = Event(
+            kind=EventKind.MENTION if mentioned else EventKind.MESSAGE,
+            scope_id=scope_id,
+            session_id=self.session_id,
+            payload={
+                "message_id": message.message_id,
+                "text": message.processed_plain_text,
+            },
+            dedupe_key=f"message:{message.platform}:{message.message_id}",
+            source="inbound",
+        )
+        if not get_event_queue(scope_id).put(event):
+            return
+        get_agent_state(scope_id).mark(event.event_id, EVENT_RECEIVED)
+    async def _restore_agent_core_state(self) -> None:
+        """Load the scope checkpoint; disabled mode keeps the legacy behavior."""
+
+        if not global_config.agent_core.enabled:
+            return
+        scope_id = self._agent_scope_id()
+        try:
+            payload = await asyncio.to_thread(AgentStateStore(scope_id).load)
+        except Exception as exc:
+            logger.warning(f"{self.log_prefix} 读取 Agent 检查点失败: {exc}")
+            return
+        if not payload:
+            return
+        restored = AgentState.from_dict(payload.get("state") or {})
+        shared = get_agent_state(scope_id)
+        shared.event_seq = max(shared.event_seq, restored.event_seq)
+        shared.pending_cursor = max(shared.pending_cursor, restored.pending_cursor)
+        if shared.wait is None:
+            shared.wait = restored.wait
+        shared.event_states.update(restored.event_states)
+        shared.discovered_tools.update(restored.discovered_tools)
+        # Profiles are not carried across restarts: the startup warm-up re-reads
+        # the last 24h, and the old profile block may already be compacted away.
+        shared.context_sidecar.update(restored.context_sidecar)
+        added = get_event_queue(scope_id).restore_into(payload.get("events") or [])
+        logger.info(f"{self.log_prefix} 已恢复 Agent 检查点: 事件={added} 序号={shared.event_seq}")
+
+    async def _persist_agent_core_state(self) -> None:
+        """Write the scope checkpoint; failures must not block shutdown."""
+
+        if not global_config.agent_core.enabled:
+            return
+        scope_id = self._agent_scope_id()
+        state = get_agent_state(scope_id)
+        events = get_event_queue(scope_id).snapshot(scope_id)
+        try:
+            await asyncio.to_thread(AgentStateStore(scope_id).save, state.to_dict(), events)
+        except Exception as exc:
+            logger.warning(f"{self.log_prefix} 写入 Agent 检查点失败: {exc}")
+        book = get_user_alias_book()
+        if book.dirty:
+            try:
+                await asyncio.to_thread(book.save)
+            except Exception as exc:
+                logger.warning(f"{self.log_prefix} 写入用户备注名失败: {exc}")
 
     def _request_planner_interrupt_for_message(self, message: SessionMessage) -> None:
         """快速反应模式下，用新消息打断运行中的 Planner。"""
@@ -1164,6 +1325,28 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
         """投递一次消息触发的内部循环。"""
         self._cancel_deferred_message_turn_task()
         self._message_turn_scheduled = True
+        loop = self._get_agent_loop()
+        if loop is not None:
+            # Debounce and gating already passed; the event drives the loop.
+            message = self.message_cache[-1] if self.message_cache else None
+            if message is not None:
+                user_info = message.message_info.user_info
+                if not is_bot_self(message.platform, user_info.user_id):
+                    mentioned, _, _ = is_mentioned_bot_in_message(message)
+                    loop.enqueue(
+                        Event(
+                            kind=EventKind.MENTION if mentioned else EventKind.MESSAGE,
+                            scope_id=loop.scope_id,
+                            session_id=self.session_id,
+                            payload={
+                                "message_id": message.message_id,
+                                "text": message.processed_plain_text,
+                            },
+                            dedupe_key=f"turn:{message.platform}:{message.message_id}",
+                            source="turn",
+                        )
+                    )
+            return
         self._internal_turn_queue.put_nowait("message")
 
     def _defer_message_turn_check(self, delay_seconds: float) -> None:
@@ -1291,7 +1474,6 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
         if not self._running:
             return
         if self._focus_group is not None:
-            self._ensure_expression_vector_history_backfill_running()
             return
 
         if self._internal_loop_task is None or self._internal_loop_task.done():
@@ -1308,25 +1490,6 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
                 logger.warning(f"{self.log_prefix} 已重新拉起 Maisaka 内部循环任务")
             else:
                 logger.debug(f"{self.log_prefix} 已启动 Maisaka 内部循环任务")
-
-        self._ensure_expression_vector_history_backfill_running()
-
-    @staticmethod
-    def _should_run_expression_vector_history_backfill() -> bool:
-        """判断是否需要启动表达向量历史补建任务。"""
-
-        return global_config.expression.use_vector_expression
-
-    def _ensure_expression_vector_history_backfill_running(self) -> None:
-        """在向量表达模式下拉起全局历史表达向量补建任务。"""
-
-        if not self._should_run_expression_vector_history_backfill():
-            return
-
-        expression_config = global_config.expression
-        expression_vector_index.ensure_history_backfill_task(
-            index_path=expression_config.expression_vector_index_path,
-        )
 
     def _register_tool_providers(self) -> None:
         """注册 Maisaka 运行时默认启用的工具 Provider。"""
@@ -1721,6 +1884,8 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
         self._pending_wait_started_at = None
         self._pending_wait_seconds = None
         self._cancel_wait_timeout_task()
+        if global_config.agent_core.enabled:
+            get_agent_state(self._agent_scope_id()).clear_wait()
 
     def _reset_consecutive_wait_count(self, reason: str) -> None:
         """重置连续 wait 计数。"""
@@ -1772,6 +1937,14 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
         self._mark_message_turn_unscheduled()
         self._cancel_deferred_message_turn_task()
         self._cancel_wait_timeout_task()
+        if global_config.agent_core.enabled:
+            # Expose the sleep to monitoring and to the tool's own result text.
+            get_agent_state(self._agent_scope_id()).start_wait(
+                session_id=self.session_id,
+                seconds=seconds if seconds is not None else 0.0,
+                tool_call_id=tool_call_id,
+                logical_turn_id=logical_turn_id,
+            )
         if seconds is not None:
             self._wait_timeout_task = asyncio.create_task(
                 self._schedule_wait_timeout(seconds=seconds, tool_call_id=tool_call_id)
@@ -1801,6 +1974,18 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
 
             logger.debug(f"{self.log_prefix} Maisaka 等待已超时")
             self._enter_running_state()
+            loop = self._get_agent_loop() if hasattr(self, "_get_agent_loop") else None
+            if loop is not None:
+                loop.enqueue(
+                    Event(
+                        kind=EventKind.WAIT_TIMEOUT,
+                        scope_id=loop.scope_id,
+                        session_id=self.session_id,
+                        dedupe_key=f"wait_timeout:{tool_call_id}",
+                        source="wait",
+                    )
+                )
+                return
             await self._internal_turn_queue.put("timeout")
         except asyncio.CancelledError:
             return
@@ -1819,6 +2004,8 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
         requested_seconds = self._pending_wait_seconds
         elapsed_seconds = max(0.0, time.time() - started_at) if started_at is not None else 0.0
         self._cancel_wait_timeout_task()
+        if global_config.agent_core.enabled:
+            get_agent_state(self._agent_scope_id()).clear_wait()
         self._pending_wait_tool_call_id = None
         self._pending_wait_logical_turn_id = None
         self._pending_wait_started_at = None
@@ -1852,20 +2039,15 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
         if not context_messages:
             await report_skip("没有可用于学习的裁切消息")
             return
-        enable_expression_learning = self._enable_expression_learning
         enable_jargon_learning = self._enable_jargon_learning
-        enable_high_frequency_learning = enable_expression_learning or enable_jargon_learning
+        enable_high_frequency_learning = enable_jargon_learning
         # 必须在检查后台任务/触发间隔之前收集，否则等待期间裁切的素材会永久漏学。
-        for enabled, learner in (
-            (enable_expression_learning, self._expression_learner),
-            (enable_jargon_learning, self._jargon_learner),
-        ):
-            if enabled:
-                learner.collect_context_messages(context_messages)
-            else:
-                learner.pending_messages.clear()
+        if enable_jargon_learning:
+            self._jargon_learner.collect_context_messages(context_messages)
+        else:
+            self._jargon_learner.pending_messages.clear()
         if not enable_high_frequency_learning:
-            await report_skip("表达与黑话学习未启用")
+            await report_skip("黑话学习未启用")
             return
 
         if self._trimmed_history_learning_task is not None and not self._trimmed_history_learning_task.done():
@@ -1892,22 +2074,21 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
                     "detail": "上一批学习仍在运行，已收集本轮素材；达到门槛后自动继续学习",
                     "learners": [
                         {
-                            "name": name,
-                            "status": "waiting" if enabled else "disabled",
+                            "name": "黑话学习",
+                            "status": "waiting" if enable_jargon_learning else "disabled",
                             "contents": [],
                             "detail": (
-                                learner.pending_messages.waiting_detail(learner.min_messages_for_extraction)
-                                if enabled else "学习未启用"
+                                self._jargon_learner.pending_messages.waiting_detail(
+                                    self._jargon_learner.min_messages_for_extraction
+                                )
+                                if enable_jargon_learning else "学习未启用"
                             ),
-                        }
-                        for name, enabled, learner in (
-                            ("表达学习", enable_expression_learning, self._expression_learner),
-                            ("黑话学习", enable_jargon_learning, self._jargon_learner),
-                        )
-                    ] + [{
-                        "name": "高频词学习", "status": "skipped", "contents": [],
-                        "detail": "上一批学习仍在运行，本轮未执行高频词统计",
-                    }],
+                        },
+                        {
+                            "name": "高频词学习", "status": "skipped", "contents": [],
+                            "detail": "上一批学习仍在运行，本轮未执行高频词统计",
+                        },
+                    ],
                 })
             return
 
@@ -1915,7 +2096,6 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
         logger.info(
             f"{self.log_prefix} 提交裁切历史后台学习: "
             f"裁切上下文消息数量={pending_context_count} "
-            f"是否启用表达学习={enable_expression_learning} "
             f"是否启用黑话学习={enable_jargon_learning} "
             f"是否启用高频词学习={enable_high_frequency_learning}"
         )
@@ -1924,7 +2104,6 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
         self._trimmed_history_learning_task = asyncio.create_task(
             self._run_trimmed_history_learning(
                 list(context_messages),
-                enable_expression_learning=enable_expression_learning,
                 enable_jargon_learning=enable_jargon_learning,
                 enable_high_frequency_learning=enable_high_frequency_learning,
                 on_progress=on_progress,
@@ -1936,7 +2115,6 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
         self,
         context_messages: Sequence[LLMContextMessage],
         *,
-        enable_expression_learning: bool,
         enable_jargon_learning: bool,
         enable_high_frequency_learning: bool,
         on_progress: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None,
@@ -1946,7 +2124,6 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
         learners: List[Dict[str, Any]] = [
             {"name": name, "status": "running" if enabled else "disabled", "contents": [], "detail": ""}
             for name, enabled in (
-                ("表达学习", enable_expression_learning),
                 ("黑话学习", enable_jargon_learning),
                 ("高频词学习", enable_high_frequency_learning),
             )
@@ -1961,7 +2138,6 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
                 await self._queued_trimmed_learning_progress(progress)
 
         learning_sources = {
-            "表达学习": self._expression_learner,
             "黑话学习": self._jargon_learner,
         }
 
@@ -1974,21 +2150,17 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
                         item.update(status="waiting", detail=f"距离上次学习不足 {self._min_extraction_interval} 秒，等待 {delay:.1f} 秒后自动执行")
                         await publish("waiting")
                         await asyncio.sleep(delay)
-                    enabled = self._enable_expression_learning if item["name"] == "表达学习" else self._enable_jargon_learning
-                    if not enabled:
+                    if not self._enable_jargon_learning:
                         learner.pending_messages.clear()
                         item.update(status="disabled", detail="学习开关已关闭，已清空待学习素材")
                         return False
                     dropped_count = learner.pending_messages.dropped_count
                     item["status"] = "running"
                     if len(learner.pending_messages) >= learner.min_messages_for_extraction:
-                        self._last_expression_extraction_time = time.time()
-                    if item["name"] == "表达学习":
-                        changed = await self._expression_learner.learn_from_context_messages([], learned_contents=contents)
-                    else:
-                        changed = await self._jargon_learner.learn_from_context_messages(
-                            [], self._jargon_miner, learned_contents=contents
-                        )
+                        self._last_extraction_time = time.time()
+                    changed = await learner.learn_from_context_messages(
+                        [], self._jargon_miner, learned_contents=contents
+                    )
                     item.update(status=learner.learning_status, detail=learner.learning_detail)
                     if dropped_count and "淘汰" not in item["detail"]:
                         item["detail"] += f"；积压超过 100 条，已淘汰最旧的 {dropped_count} 条素材"
@@ -2018,7 +2190,7 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
         await publish("running")
         batch = [item for item in learners if item["status"] == "running"]
         while batch:
-            delay = max(0.0, self._min_extraction_interval - (time.time() - self._last_expression_extraction_time))
+            delay = max(0.0, self._min_extraction_interval - (time.time() - self._last_extraction_time))
             try:
                 results = await asyncio.gather(*(run_learning(item, delay) for item in batch))
             except asyncio.CancelledError:

@@ -587,7 +587,7 @@ class JargonMiner:
         self, entries: List[JargonEntry], person_name_filter: Optional[Callable[[str], bool]] = None
     ) -> Tuple[int, int]:
         """
-        处理已提取的黑话条目（从 expression_learner 路由过来的）
+        处理已提取的黑话条目。
 
         Args:
             entries: 黑话条目列表

@@ -41,6 +41,32 @@ if TYPE_CHECKING:
 logger = get_logger("maisaka_builtin_context")
 
 
+def _resolve_at_user_id(token: str) -> str:
+    """Turn a uid, display name or raw platform id into a platform user id.
+
+    Message headers show a short uid rather than a msg_id, so the model
+    regularly hands one back when it wants to mention the sender.
+    """
+
+    query = str(token or "").strip()
+    if not query:
+        return ""
+    try:
+        from src.maisaka.agent_core.user_alias import get_user_alias_book
+
+        book = get_user_alias_book()
+        person_id = book.resolve_person_id(query)
+        if person_id:
+            record = book.people().get(person_id) or {}
+            user_id = str(record.get("user_id") or "").strip()
+            if user_id:
+                return user_id
+    except Exception:
+        logger.debug(f"解析 at 目标失败，回退到原始 id: token={query}", exc_info=True)
+    # A raw platform user id can be passed straight through.
+    return query if query.isdigit() else ""
+
+
 @dataclass
 class PostProcessedReplyMessage:
     """一条待发送的后处理回复及其引用提示。"""
@@ -154,7 +180,7 @@ class BuiltinToolRuntimeContext:
         *,
         skip_post_process: bool = False,
         enable_splitter: bool = True,
-        enable_chinese_typo: bool = True,
+        enable_chinese_typo: bool = False,
     ) -> List[str]:
         """沿用旧回复链的文本后处理，执行分段与错别字注入。"""
 
@@ -181,7 +207,7 @@ class BuiltinToolRuntimeContext:
         *,
         skip_post_process: bool = False,
         enable_splitter: bool = True,
-        enable_chinese_typo: bool = True,
+        enable_chinese_typo: bool = False,
     ) -> List[ProcessedResponseSegment]:
         """执行文本后处理，并保留错别字纠正段的引用提示。"""
 
@@ -214,7 +240,7 @@ class BuiltinToolRuntimeContext:
         *,
         skip_post_process: bool = False,
         enable_splitter: bool = True,
-        enable_chinese_typo: bool = True,
+        enable_chinese_typo: bool = False,
     ) -> List[PostProcessedReplyMessage]:
         """将纯文本回复处理为带发送提示的组件序列。"""
 
@@ -238,7 +264,7 @@ class BuiltinToolRuntimeContext:
         *,
         skip_post_process: bool = False,
         enable_splitter: bool = True,
-        enable_chinese_typo: bool = True,
+        enable_chinese_typo: bool = False,
     ) -> List[MessageSequence]:
         """将 replyer 输出处理为可发送组件序列。"""
 
@@ -257,7 +283,7 @@ class BuiltinToolRuntimeContext:
         *,
         skip_post_process: bool = False,
         enable_splitter: bool = True,
-        enable_chinese_typo: bool = True,
+        enable_chinese_typo: bool = False,
     ) -> List[MessageSequence]:
         """将纯文本回复处理为可发送组件序列。"""
 
@@ -286,6 +312,12 @@ class BuiltinToolRuntimeContext:
 
         target_message = self.runtime.find_source_message_by_id(target_message_id)
         if target_message is None:
+            # The model often hands back the short uid from a message header
+            # (or a plain name) instead of a msg_id. Accept those too; a bad @
+            # must never cost the whole send.
+            fallback_user_id = _resolve_at_user_id(target_message_id)
+            if fallback_user_id:
+                return AtComponent(target_user_id=fallback_user_id)
             raise ValueError(f"无法解析 at 目标消息：msg_id={to_display_message_id(target_message_id)}")
 
         user_info = target_message.message_info.user_info
@@ -376,7 +408,7 @@ class BuiltinToolRuntimeContext:
         *,
         skip_post_process: bool = False,
         enable_splitter: bool = True,
-        enable_chinese_typo: bool = True,
+        enable_chinese_typo: bool = False,
     ) -> List[PostProcessedReplyMessage]:
         """异步处理 replyer 正文和附件，并保留每条消息的发送提示。"""
 
@@ -407,10 +439,13 @@ class BuiltinToolRuntimeContext:
         if raw_emoji is not None and not global_config.emoji.use_new_send_logic:
             raise ValueError("新表情包发送逻辑未开启，请使用 send_emoji 工具。")
 
-        at_components = [
-            self._resolve_at_attachment(raw_target)
-            for raw_target in self._normalize_attachment_list(attachment_args.get("attach_at"), "attach_at")
-        ]
+        at_components = []
+        for raw_target in self._normalize_attachment_list(attachment_args.get("attach_at"), "attach_at"):
+            try:
+                at_components.append(self._resolve_at_attachment(raw_target))
+            except ValueError as exc:
+                # Losing the mention is far cheaper than losing the message.
+                logger.warning(f"{self.runtime.log_prefix} 跳过无法解析的 at 目标: {exc}")
         image_components = [
             await self._resolve_image_attachment(raw_attachment)
             for raw_attachment in self._normalize_attachment_list(attachment_args.get("attach_pic"), "attach_pic")

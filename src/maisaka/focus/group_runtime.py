@@ -19,6 +19,9 @@ from src.common.utils.utils_config import ChatConfigUtils
 from src.config.config import global_config
 from src.core.tooling import ToolExecutionResult
 from src.llm_models.payload_content.context_item import FunctionCallItem
+from src.maisaka.agent_core import Event, EventKind
+from src.maisaka.agent_core.registry import get_agent_loop, get_agent_state
+from src.maisaka.agent_core.timefmt import format_wait_duration
 from src.maisaka.chat_loop_service import ChatResponse, MaisakaChatLoopService
 from src.maisaka.context.messages import (
     ContentContextMessage,
@@ -50,7 +53,7 @@ class FocusChatLoopService(MaisakaChatLoopService):
     """组级请求没有默认聊天，不把某个成员的身份或额外规则冒充成整个组。"""
 
     def _get_chat_prompt_name(self) -> str:
-        return "maisaka_chat_focus"
+        return "agent_core"
 
 
 class FocusGroupRuntime:
@@ -65,7 +68,9 @@ class FocusGroupRuntime:
         self._considered: Dict[str, int] = {}
         self._sequence = 0
         self._generation = 0
-        self._event = asyncio.Event()
+        # The group consumes the same scope queue every member mirrors its
+        # messages into, so there is one consumer per scope.
+        self._loop = get_agent_loop(scope_id)
         self._worker: Optional[asyncio.Task] = None
         self._closed = False
         self._failed = False
@@ -74,6 +79,8 @@ class FocusGroupRuntime:
         self._wait_until: Optional[float] = None
         self._wait_session_id: Optional[str] = None
         self._wait_token: Optional[str] = None
+        self._sleeping = False
+        self._wait_started_at: Optional[float] = None
         self._consecutive_waits = 0
         self._sent: List[FocusContextEntry] = []
         self._active_batch: Optional[FocusContextEntry] = None
@@ -134,6 +141,12 @@ class FocusGroupRuntime:
             self._wait_session_id = None
             self._wait_token = None
         self._consecutive_waits = payload["consecutive_waits"]
+        # Only the infinite sleep survives; older checkpoints may carry a deadline.
+        self._sleeping = self._wait_until is not None
+        self._wait_until = 0.0 if self._sleeping else None
+        if self._sleeping:
+            # The original start time is not part of the checkpoint schema.
+            self._wait_started_at = time.time()
         # 未完成判断的输入仍在时间线中，成员重新接入后安排处理；不重放旧工具。
         for entry in self.entries:
             self._ready.update(
@@ -205,7 +218,7 @@ class FocusGroupRuntime:
         ):
             self._ready.add(runtime.session_id)
         if runtime.session_id in self._ready or self._wait_until is not None:
-            self._event.set()
+            self._wake()
             self._ensure_worker()
 
     def is_member_valid(self, runtime: MaisakaHeartFlowChatting) -> bool:
@@ -246,7 +259,7 @@ class FocusGroupRuntime:
         await self.checkpoint()
         if self.members:
             self._ensure_worker()
-            self._event.set()
+            self._wake()
 
     async def register_message(
         self,
@@ -258,9 +271,12 @@ class FocusGroupRuntime:
             return
         if history_message is not None:
             self._queue_entry(runtime.session_id, history_message)
-        awakened = message.is_at and self._wait_until is not None
+        awakened = self._wait_until is not None and (message.is_at or self._sleeping)
         if awakened:
-            self._finish_wait(f"{runtime.session_name} 收到 @")
+            reason = f"{runtime.session_name} 收到 @"
+            if self._sleeping:
+                reason = f"{runtime.session_name} 收到新消息"
+            self._finish_wait(reason)
         self._ready.discard(runtime.session_id)
         task = self._debounce_tasks.get(runtime.session_id)
         if task is None or task.done():
@@ -272,7 +288,7 @@ class FocusGroupRuntime:
         elif message.is_at:
             # @ 只排队，不取消当前请求；下一次快照必须包含它，不能被普通防抖推迟到再下一轮。
             self._ready.add(runtime.session_id)
-            self._event.set()
+            self._wake()
         await self.checkpoint()
         self._ensure_worker()
 
@@ -326,7 +342,7 @@ class FocusGroupRuntime:
         await runtime._wait_for_message_quiet_period()
         if runtime.session_id in self.members:
             self._ready.add(runtime.session_id)
-            self._event.set()
+            self._wake()
 
     def register_proactive(self, runtime: MaisakaHeartFlowChatting, trigger: SessionMessage) -> None:
         if not self._remember(runtime.session_id, "internal:" + trigger.message_id):
@@ -345,7 +361,7 @@ class FocusGroupRuntime:
         )
         self._queue_entry(runtime.session_id, notice)
         self._ready.add(runtime.session_id)
-        self._event.set()
+        self._wake()
         self._ensure_worker()
         self._schedule_checkpoint()
 
@@ -385,7 +401,7 @@ class FocusGroupRuntime:
         self._state = "failed" if self._failed else ("wait" if self._wait_until is not None else "running")
         for runtime in self.members.values():
             runtime._agent_state = runtime._STATE_WAIT if self._wait_until is not None else runtime._STATE_RUNNING
-            runtime._update_stage_status(stage, f"Focus 共享组 · {detail}", wait_until=self._wait_until)
+            runtime._update_stage_status(stage, f"Focus 共享组 · {detail}")
 
     def _take_ready_inputs(self) -> List[FocusContextEntry]:
         entries = []
@@ -397,11 +413,64 @@ class FocusGroupRuntime:
             self.members[sid]._collect_pending_messages()
             self.members[sid]._clear_forced_turn_state()
         entries.sort(key=lambda entry: entry.sequence)
+        entries = self._insert_switch_notices(entries)
         self.entries.extend(entries)
         if self._sent:
             self.entries.extend(self._sent)
             self._sent.clear()
+        # Everything taken above is in the timeline now. Their wake-up events
+        # must not keep counting as unread: send_messages refuses to reply while
+        # the target session has unread events, and a turn keeps ingesting new
+        # input for several internal rounds, so a message arriving mid-turn
+        # would otherwise block every send until the whole turn ended.
+        self._drain_events()
         return entries
+
+    @staticmethod
+    def _entry_session_id(entry: FocusContextEntry) -> str:
+        """A timeline entry belongs to exactly one conversation, if any."""
+
+        return next(iter(entry.session_ids)) if len(entry.session_ids) == 1 else ""
+
+    def _last_timeline_session_id(self) -> str:
+        for entry in reversed(self.entries):
+            session_id = self._entry_session_id(entry)
+            if session_id:
+                return session_id
+        return ""
+
+    def _insert_switch_notices(self, entries: List[FocusContextEntry]) -> List[FocusContextEntry]:
+        """Mark the jump when the shared timeline moves to another conversation.
+
+        Consecutive messages from the same chat append silently; the notice is
+        only emitted on a real switch, and it is written once so the cached
+        prefix stays stable.
+        """
+
+        marked: List[FocusContextEntry] = []
+        previous = self._last_timeline_session_id()
+        for entry in entries:
+            session_id = self._entry_session_id(entry)
+            if session_id and previous and session_id != previous:
+                marked.append(FocusContextEntry([self._switch_notice(session_id)], set(), entry.sequence))
+            marked.append(entry)
+            if session_id:
+                previous = session_id
+        return marked
+
+    def _switch_notice(self, session_id: str) -> ReferenceMessage:
+        member = self.members.get(session_id)
+        name = member.session_name if member is not None else chat_manager.get_session_name(session_id)
+        kind = "群聊" if member is not None and member.chat_stream.is_group_session else "私聊"
+        return ReferenceMessage(
+            content=(
+                f"上一条消息属于其他会话。下面这些消息来自{kind}「{name}」({session_id})。\n"
+                "回复前请确认目标会话，不要把它和上面对话的内容混在一起。"
+            ),
+            timestamp=datetime.now(),
+            remaining_uses_value=None,
+            display_prefix="[会话切换]",
+        )
 
     def _roster(self) -> str:
         chats = []
@@ -413,24 +482,17 @@ class FocusGroupRuntime:
         return "\n".join(chats)
 
     def execute_control(self, name: str, arguments: Dict[str, Any], session_id: str) -> ToolExecutionResult:
-        if name == "wait":
-            seconds = arguments.get("seconds")
-            if type(seconds) is not int or seconds < 0:
-                return ToolExecutionResult(tool_name=name, success=False, error_message="seconds 必须是非负整数。")
+        if name == "sleep":
+            # Sleep has no timeout: any new message in the shared group wakes it.
             self._consecutive_waits += 1
-            self._wait_until = time.time() + seconds
+            self._sleeping = True
+            self._wait_until = 0.0
+            self._wait_started_at = time.time()
             self._wait_session_id = session_id
             self._wait_token = uuid.uuid4().hex
-            content = f"已为整个 Focus 共享组登记等待 {seconds} 秒；@ 可以提前唤醒。"
-            if any(
-                isinstance(message, SessionBackedMessage) and message.original_message.is_at
-                for batch in self._pending.values()
-                for entry in batch
-                for message in entry.messages
-            ):
-                self._finish_wait("等待登记前已有尚未提交的 @ 消息")
-                self._ready.update(self._pending)
-                content = "已登记整组等待，但已有尚未提交的 @ 消息，立即继续下一次思考。"
+            # Mirror the sleep into scope state so monitoring sees it.
+            get_agent_state(self.scope_id).start_wait(session_id=session_id, seconds=0.0)
+            content = "已进入待机，等待下一个事件；期间出现的新消息会唤醒整个共享组。"
         else:
             self._consecutive_waits = 0
             content = "已结束整个 Focus 共享组的本轮思考。"
@@ -438,50 +500,93 @@ class FocusGroupRuntime:
 
     def _finish_wait(self, reason: str) -> None:
         sid = self._wait_session_id
+        started_at = self._wait_started_at
         self._wait_until = None
         self._wait_session_id = None
         self._wait_token = None
+        self._sleeping = False
+        self._wait_started_at = None
+        get_agent_state(self.scope_id).clear_wait()
         if sid is not None:
+            elapsed = time.time() - started_at if started_at is not None else 0.0
+            pending = sum(len(batch) for batch in self._pending.values())
             self._queue_entry(
                 sid,
                 ReferenceMessage(
-                    content=f"session_id={sid} 发起的整组等待已结束：{reason}。请结合所有聊天的新消息继续判断。",
+                    content=(
+                        f"整组待机结束（空闲 {format_wait_duration(elapsed)}）：{reason}。"
+                        f"期间缓存了 {pending} 条尚未判断的输入，请结合所有聊天的新消息继续判断。"
+                    ),
                     timestamp=datetime.now(),
                     remaining_uses_value=None,
                     display_prefix="[Focus 等待结束]",
                 ),
             )
             self._ready.add(sid)
-        self._event.set()
+        self._wake()
+
+    def _wake(self) -> None:
+        """Wake the scope consumer through the shared event queue."""
+
+        session_id = next(iter(self.members), "")
+        if not session_id:
+            return
+        self._loop.enqueue(
+            Event(
+                kind=EventKind.INTERNAL,
+                scope_id=self.scope_id,
+                session_id=session_id,
+                dedupe_key=f"focus:wake:{uuid.uuid4().hex}",
+                source="focus",
+            )
+        )
+
+    def _has_ready_input(self) -> bool:
+        """True when some member has input the planner has not judged yet."""
+
+        if any(self._pending.get(sid) for sid in self._ready if sid in self.members):
+            return True
+        return any(
+            sequence > self._considered.get(sid, 0)
+            for entry in self.entries
+            for sid, sequence in entry.progress.items()
+            if sid in self.members
+        )
+
+    async def _wait_for_events(self, timeout: Optional[float] = None) -> None:
+        """Block on the scope queue; drained events only signalled a wake-up."""
+
+        if timeout is not None and timeout <= 0:
+            self._loop.drain_pending()
+            return
+        try:
+            batch = await self._loop.wait_for_batch(timeout=timeout)
+        except asyncio.TimeoutError:
+            return
+        batch.extend(self._loop.take_all())
+        self._loop.finish_batch(batch)
+
+    def _drain_events(self) -> None:
+        """Finish the events that woke us; their content is already in the timeline."""
+
+        self._loop.drain_pending()
 
     async def run(self) -> None:
         try:
             while not self._closed and self.members:
                 if self._wait_until is not None:
-                    self._set_stage("等待", "整组暂停，@ 可以提前唤醒")
-                    remaining = max(0.0, self._wait_until - time.time())
-                    self._event.clear()
-                    try:
-                        await asyncio.wait_for(self._event.wait(), timeout=remaining)
-                    except asyncio.TimeoutError:
-                        self._finish_wait("等待到期")
+                    self._set_stage("等待", "整组待机，等待下一个事件")
+                    await self._wait_for_events()
                     continue
-                restored_pending = any(
-                    sequence > self._considered.get(sid, 0)
-                    for entry in self.entries
-                    for sid, sequence in entry.progress.items()
-                    if sid in self.members
-                )
-                ready_inputs = any(self._pending.get(sid) for sid in self._ready if sid in self.members)
-                if not ready_inputs and not restored_pending:
+                if not self._has_ready_input():
                     self._state = "stop"
                     for runtime in self.members.values():
                         runtime._agent_state = runtime._STATE_STOP
                         runtime._update_stage_status("空闲", "Focus 共享组等待新消息")
-                    self._event.clear()
-                    await self._event.wait()
+                    await self._wait_for_events()
                     continue
                 self._take_ready_inputs()
+                self._drain_events()
                 await self._run_turn()
         except asyncio.CancelledError:
             raise
@@ -500,6 +605,7 @@ class FocusGroupRuntime:
                 return
             self._take_ready_inputs()
             await self._compact()
+            await self._refresh_visual_placeholders()
             await self.tools.refresh()
             generation = self._generation
             references = await self._build_references()
@@ -788,6 +894,27 @@ class FocusGroupRuntime:
             focus_session_ids=list(self.members),
         )
 
+    async def _refresh_visual_placeholders(self) -> None:
+        """Backfill image/emoji placeholders with finished recognition before the planner call.
+
+        Focus mode calls the planner directly from the shared timeline, which bypasses the
+        placeholder refresh and recognition wait performed by the per-chat reasoning loop.
+        """
+
+        if not self.members:
+            return
+        engine = next(iter(self.members.values()))._reasoning_engine
+        slots = [(entry, index) for entry in self.entries for index in range(len(entry.messages))]
+        if not slots:
+            return
+        history = [entry.messages[index] for entry, index in slots]
+        await engine._refresh_chat_history_visual_placeholders(
+            chat_history=history,
+            wait_for_text_model=True,
+        )
+        for (entry, index), message in zip(slots, history, strict=True):
+            entry.messages[index] = message
+
     async def _compact(self) -> None:
         planner_snapshot = self._service.planner_request_snapshot
         if planner_snapshot is None:
@@ -895,6 +1022,7 @@ class FocusGroupRuntime:
 
     async def stop(self) -> None:
         self._closed = True
+        self._loop.cancel_scheduled()
         await self._cancel_worker()
         for task in self._debounce_tasks.values():
             task.cancel()

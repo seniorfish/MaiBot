@@ -503,6 +503,14 @@ def raw_main():
     return MainSystem()
 
 
+# Diagnostic switch: MAIBOT_DEBUG_STACKS=1 dumps every thread's stack every
+# 60 seconds, so a hung startup can be attributed to a specific await.
+if __name__ == "__main__" and os.environ.get("MAIBOT_DEBUG_STACKS") == "1":
+    import faulthandler
+
+    faulthandler.dump_traceback_later(60, repeat=True)
+
+
 if __name__ == "__main__":
     exit_code = 0  # 用于记录程序最终的退出状态
     main_system: MainSystem | None = None
@@ -518,6 +526,22 @@ if __name__ == "__main__":
         asyncio.set_event_loop(loop)
         set_main_loop(loop)
         _active_main_loop = loop
+        if os.environ.get("MAIBOT_DEBUG_STACKS") == "1":
+
+            def _dump_async_tasks() -> None:
+                print("=== ASYNC TASKS ===", file=sys.stderr)
+                for task in asyncio.all_tasks(loop):
+                    print(f"--- {task.get_name()} done={task.done()} ---", file=sys.stderr)
+                    frames = task.get_stack()
+                    if frames:
+                        print("".join(traceback.format_list(traceback.extract_stack(frames[0]))), file=sys.stderr, end="")
+                    else:
+                        print("  <no frames>", file=sys.stderr)
+                    print(f"  coro: {task.get_coro()!r}", file=sys.stderr)
+                print("=== END ===", file=sys.stderr)
+                loop.call_later(30, _dump_async_tasks)
+
+            loop.call_later(75, _dump_async_tasks)
         worker_signals = application_signal_handlers(_mark_shutdown_and_interrupt)
         worker_signals.__enter__()
 

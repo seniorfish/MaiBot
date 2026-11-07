@@ -34,7 +34,7 @@ class MessageTurnScheduler:
         if runtime._agent_state == runtime._STATE_WAIT:
             if runtime._is_reply_frequency_silent():
                 runtime._enter_stop_state()
-            elif not global_config.chat.reply_timing.planner_message_steering:
+            elif not global_config.chat.reply_timing.planner_message_steering and not global_config.agent_core.enabled:
                 if runtime.chat_stream.is_group_session:
                     return
                 logger.info(f"{runtime.log_prefix} 私聊 wait 期间收到新消息，结束等待并进入 Planner")

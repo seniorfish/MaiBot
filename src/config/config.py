@@ -34,6 +34,7 @@ from .legacy_migration import (
 from .model_configs import APIProvider, ModelInfo, ModelTaskConfig
 from .official_configs import (
     AMemorixConfig,
+    AgentCoreConfig,
     BotConfig,
     CapabilitiesConfig,
     ChatConfig,
@@ -41,7 +42,6 @@ from .official_configs import (
     DebugConfig,
     EmojiConfig,
     ExperimentalConfig,
-    ExpressionConfig,
     JargonConfig,
     KeywordReactionConfig,
     LogConfig,
@@ -74,7 +74,7 @@ BOT_CONFIG_PATH: Path = (CONFIG_DIR / "bot_config.toml").resolve().absolute()
 MODEL_CONFIG_PATH: Path = (CONFIG_DIR / "model_config.toml").resolve().absolute()
 LEGACY_ENV_PATH: Path = (PROJECT_ROOT / ".env").resolve().absolute()
 MMC_VERSION: str = read_project_version(PROJECT_ROOT)
-CONFIG_VERSION: str = "8.15.68"
+CONFIG_VERSION: str = "8.15.72"
 MODEL_CONFIG_VERSION: str = "1.17.25"
 
 logger = get_logger("config")
@@ -102,6 +102,9 @@ class Config(ConfigBase):
 
     agent: AgentConfig = Field(default_factory=AgentConfig)
     """统一独立 Agent 配置"""
+
+    agent_core: AgentCoreConfig = Field(default_factory=AgentCoreConfig)
+    """事件驱动 Agent 核心配置"""
 
     computer: ComputerConfig = Field(default_factory=ComputerConfig)
     """共享沙盒电脑配置"""
@@ -132,9 +135,6 @@ class Config(ConfigBase):
 
     visual: VisualConfig = Field(default_factory=VisualConfig)
     """视觉配置类"""
-
-    expression: ExpressionConfig = Field(default_factory=ExpressionConfig)
-    """表达配置类"""
 
     jargon: JargonConfig = Field(default_factory=JargonConfig)
     """黑话配置类"""

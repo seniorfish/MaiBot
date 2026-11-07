@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Mapping, Sequence
+
+import hashlib
+import re
 
 from src.chat.message_receive.message import SessionMessage
 from src.A_memorix.core.utils.profile_text import build_profile_injection_text
 from src.common.data_models.message_component_data_model import AtComponent, ReplyComponent
 from src.common.logger import get_logger
 from src.config.config import global_config
+from src.maisaka.agent_core.user_alias import get_user_alias_book
 from src.person_info.person_info import resolve_person_id_for_memory
 from src.services.bot_account_service import is_bot_self
 from src.services.memory_service import memory_service
@@ -18,6 +22,9 @@ logger = get_logger("maisaka_person_profile_injector")
 
 PROFILE_QUERY_LIMIT = 4
 PROFILE_TEXT_MAX_CHARS = 900
+# A_memorix disambiguates duplicate display names by appending the person id.
+_IDENTITY_SUFFIX_RE = re.compile(r"\s*\[[0-9a-f]{8,32}\]")
+_PRIMARY_NAME_RE = re.compile(r"(?m)^主称呼:\s*(.*)$")
 
 
 @dataclass(frozen=True)
@@ -188,12 +195,42 @@ def _extract_profile_text(payload: object) -> str:
     return _clean_text(payload.get("profile_text") or payload.get("summary"))
 
 
+def strip_identity_suffix(name: str) -> str:
+    """Drop the ``[person id]`` suffix A_memorix adds to duplicate names."""
+
+    return _IDENTITY_SUFFIX_RE.sub("", name).strip()
+
+
+def _preferred_display_name(person_id: str, fallback: str) -> str:
+    """The group remark (real name) beats whatever name memory stored."""
+
+    alias = get_user_alias_book().display_name_by_person_id(person_id)
+    return strip_identity_suffix(alias or fallback)
+
+
+def rewrite_profile_names(profile_text: str, person_id: str) -> str:
+    """Show the person by their real name instead of their QQ nickname."""
+
+    text = _IDENTITY_SUFFIX_RE.sub("", profile_text)
+    alias = get_user_alias_book().display_name_by_person_id(person_id)
+    if not alias:
+        return text
+
+    def _replace(match: re.Match[str]) -> str:
+        original = strip_identity_suffix(match.group(1))
+        if not original or original == alias:
+            return match.group(0)
+        return f"主称呼: {alias}（QQ 昵称 {original}）"
+
+    return _PRIMARY_NAME_RE.sub(_replace, text, count=1)
+
+
 def _profile_display_name(candidate: PersonProfileCandidate, payload: object) -> str:
+    fallback = ""
     if isinstance(payload, dict):
-        payload_name = _clean_text(payload.get("person_name"))
-        if payload_name:
-            return payload_name
-    return _candidate_name(candidate.person_name, candidate.user_id, candidate.person_id)
+        fallback = _clean_text(payload.get("person_name"))
+    fallback = fallback or _candidate_name(candidate.person_name, candidate.user_id, candidate.person_id)
+    return _preferred_display_name(candidate.person_id, fallback)
 
 
 def _truncate_profile_text(profile_text: str) -> str:
@@ -221,14 +258,21 @@ def _format_profile_person_block(display_name: str, profile_text: str) -> str:
 
 async def build_person_profile_injection_messages(
     *,
-    anchor_message: SessionMessage,
+    anchor_message: SessionMessage | None,
     pending_messages: Sequence[SessionMessage] | None = None,
-) -> list[str]:
-    """构造注入 planner 的一次性人物画像内部参考消息。"""
+    known_profiles: Mapping[str, str] | None = None,
+) -> tuple[list[str], dict[str, str]]:
+    """构造注入 planner 的一次性人物画像内部参考消息。
+
+    ``known_profiles`` maps person id to the fingerprint of the profile text
+    the scope already saw, so an unchanged profile is not repeated while a
+    refreshed one is injected again. The second return value holds the
+    fingerprints for the people actually injected.
+    """
 
     integration_config = global_config.a_memorix.integration
     if not integration_config.enable_person_profile_injection:
-        return []
+        return [], {}
 
     candidates = collect_person_profile_candidates(
         anchor_message,
@@ -236,14 +280,16 @@ async def build_person_profile_injection_messages(
         max_profiles=integration_config.person_profile_injection_max_profiles,
     )
     if not candidates:
-        return []
+        return [], {}
 
     context_text = "\n".join(
         str(message.processed_plain_text or "").strip()
         for message in [anchor_message, *(pending_messages or ())]
-        if str(message.processed_plain_text or "").strip()
+        if message is not None and str(message.processed_plain_text or "").strip()
     )[:1000]
+    known = known_profiles or {}
     blocks: list[str] = []
+    injected_profiles: dict[str, str] = {}
     for candidate in candidates:
         try:
             payload = await memory_service.profile_admin(
@@ -265,7 +311,7 @@ async def build_person_profile_injection_messages(
             str(item.get("text", "")) for item in payload.get("uncertain_candidates", []) if isinstance(item, dict)
         ]
         profile_text = build_profile_injection_text(
-            _extract_profile_text(payload),
+            rewrite_profile_names(_extract_profile_text(payload), candidate.person_id),
             uncertain_candidates=uncertain_candidates,
             include_uncertain_fallback=False,
         )
@@ -273,8 +319,13 @@ async def build_person_profile_injection_messages(
             logger.debug(f"人物画像注入跳过空画像: person_id={candidate.person_id!r}")
             continue
 
+        fingerprint = hashlib.sha1(profile_text.encode("utf-8")).hexdigest()[:12]
+        if known.get(candidate.person_id) == fingerprint:
+            continue
+
         display_name = _profile_display_name(candidate, payload)
         blocks.append(_format_profile_person_block(display_name, profile_text))
+        injected_profiles[candidate.person_id] = fingerprint
 
     reference_block = _format_profile_reference_block(blocks)
-    return [reference_block] if reference_block else []
+    return ([reference_block] if reference_block else []), injected_profiles

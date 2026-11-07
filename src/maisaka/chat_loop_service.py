@@ -69,6 +69,8 @@ from src.maisaka.display.prompt_cli_renderer import PromptCLIVisualizer
 from src.maisaka.context.compaction import ContextSummaryMessage, PlannerRequestSnapshot
 from src.maisaka.context.post_processor import MIN_RETAINED_CHAT_MESSAGES
 from src.maisaka.focus import focus_mode_manager
+from src.maisaka.agent_core.registry import get_agent_state
+from src.maisaka.agent_core.tiering import LifecycleTracker, apply_request_policy
 from src.maisaka.visual.message_limiter import limit_latest_images_in_messages
 from src.maisaka.visual.deferred_images import defer_context_image_encoding
 from src.maisaka.context.emoji_candidates import EmojiCandidateMessage
@@ -92,15 +94,9 @@ PROMPT_PREVIEW_CATEGORY_BY_REQUEST_KIND = {
     "sub_agent": "sub_agent",
 }
 CONTEXT_SELECTION_CACHE_STABILITY_RATIO = 2.0
-FOCUS_PLANNER_FINAL_USER_REMINDER_TEMPLATE = (
-    "你需要输出对{bot_name}发言的分析，视情况输出文本内容的分析，思考是否进行工具调用"
+AGENT_FINAL_USER_REMINDER = (
+    "为本轮做个决定：需要说话就调用 send_messages，不需要说话就调用 sleep。每个事件都必须以一个工具调用结束。"
 )
-PLANNER_FINAL_USER_REMINDER = "请你进行分析，是不调用工具，进行思考和等待\n还是使用工具搜集处理信息或使用reply回复"
-PASSIVE_PLANNER_FINAL_USER_REMINDERS = {
-    "zh-CN": "需要信息或操作时调用工具；决定发言时直接输出指导正文，不附带工具调用；不发言用 stop，需要稍后判断用 wait。",
-    "en-US": "Use tools for information or actions. To speak, output guidance without tool calls. Use stop to stay silent, or wait to reconsider later.",
-    "ja-JP": "情報や操作が必要ならツールを使い、発言する場合はツール呼び出しを伴わない指針本文を出力してください。発言しない場合は stop、後で再判断する場合は wait を使ってください。",
-}
 
 
 @dataclass(slots=True)
@@ -569,54 +565,6 @@ def register_maisaka_hook_specs(registry: HookSpecRegistry) -> List[HookSpec]:
                 allow_abort=False,
                 allow_kwargs_mutation=True,
             ),
-            HookSpec(
-                name="maisaka.reply.before_post_process",
-                description="在 Maisaka 对最终可见回复执行文本后处理前触发，可按本次回复调整后处理策略。",
-                parameters_schema=build_object_schema(
-                    {
-                        "response": {
-                            "type": "string",
-                            "description": "即将执行文本后处理的最终回复正文。",
-                        },
-                        "session_id": {
-                            "type": "string",
-                            "description": "当前会话 ID。",
-                        },
-                        "reply_message_id": {
-                            "type": "string",
-                            "description": "被回复消息 ID。",
-                        },
-                        "reply_tool_args": {
-                            "type": "object",
-                            "description": "本次 reply 工具除内部参数外的透传参数。",
-                        },
-                        "skip_post_process": {
-                            "type": "boolean",
-                            "description": "是否跳过本次回复的全部文本后处理。",
-                        },
-                        "enable_splitter": {
-                            "type": "boolean",
-                            "description": "本次回复是否允许按全局配置进行文本拆分。",
-                        },
-                        "enable_chinese_typo": {
-                            "type": "boolean",
-                            "description": "本次回复是否允许按全局配置注入中文错别字。",
-                        },
-                    },
-                    required=[
-                        "response",
-                        "session_id",
-                        "reply_message_id",
-                        "reply_tool_args",
-                        "skip_post_process",
-                        "enable_splitter",
-                        "enable_chinese_typo",
-                    ],
-                ),
-                default_timeout_ms=6000,
-                allow_abort=False,
-                allow_kwargs_mutation=True,
-            ),
         ]
     )
 
@@ -652,7 +600,6 @@ class MaisakaChatLoopService:
         self._prompt_load_lock = asyncio.Lock()
         self._llm_chat_clients: dict[str, LLMServiceClient] = {}
         self.planner_request_snapshot: PlannerRequestSnapshot | None = None
-        self.passive_replyer_override: Optional[bool] = None
 
     @property
     def behavior_style_prompt(self) -> str:
@@ -779,27 +726,21 @@ class MaisakaChatLoopService:
         return system_prompt
 
     def _build_planner_final_user_reminder(self) -> str:
-        """构造每轮 Planner 请求末尾的一次性 user 提醒。"""
+        """构造每轮请求末尾的一次性 user 提醒。"""
 
-        prompt_name = self._get_chat_prompt_name()
-        if prompt_name == "maisaka_chat_passive":
-            return PASSIVE_PLANNER_FINAL_USER_REMINDERS.get(get_locale(), PASSIVE_PLANNER_FINAL_USER_REMINDERS["zh-CN"])
-        if prompt_name == "maisaka_chat":
-            return PLANNER_FINAL_USER_REMINDER
-        return FOCUS_PLANNER_FINAL_USER_REMINDER_TEMPLATE.format(bot_name=global_config.bot.nickname.strip())
+        return AGENT_FINAL_USER_REMINDER
 
-    def _get_chat_prompt_name(self) -> str:
-        """选择当前聊天使用的 Planner 模板。"""
+    def _agent_scope_id(self) -> str:
+        """Scope used by the event core; Focus members share the group scope."""
 
         if focus_mode_manager.is_enabled_for_session(self._session_id, is_group_chat=self._is_group_chat):
-            return "maisaka_chat_focus"
-        passive_replyer = (
-            self.passive_replyer_override if self.passive_replyer_override is not None
-            else global_config.experimental.passive_replyer
-        )
-        if passive_replyer:
-            return "maisaka_chat_passive"
-        return "maisaka_chat"
+            return focus_mode_manager.get_focus_scope_key(self._session_id)
+        return self._session_id
+
+    def _get_chat_prompt_name(self) -> str:
+        """The event-driven core is the only planner template now."""
+
+        return "agent_core"
 
     def _build_bot_alias_notice(self) -> str:
         """构造普通聊天模板中紧跟在名字之后的别名说明；没有配置别名时为空。"""
@@ -825,12 +766,22 @@ class MaisakaChatLoopService:
             "bot_nickname_notice": f"\n{bot_nickname_notice}" if bot_nickname_notice else "",
             "personality": global_config.personality.personality.strip(),
             "behavior_style": self.behavior_style_prompt,
+            "reply_style": global_config.personality.reply_style.strip(),
+            "group_or_private_prompt": self._build_scene_prompt(),
             "file_tools_section": tools_section,
             "group_chat_attention_block": self._build_group_chat_attention_block(),
             "planner_idle_focus_rule": self._build_planner_idle_focus_rule(),
             "query_memory_rule": self._build_query_memory_rule(),
             "subagent_rule": self._build_subagent_rule(),
         }
+
+    def _build_scene_prompt(self) -> str:
+        """场景说明：Agent 核心把群聊/私聊提示直接并入行为风格。"""
+
+        style = global_config.chat.reply_style
+        prompt = style.group_chat_prompt if self._is_group_chat else style.private_chat_prompts
+        prompt = (prompt or "").strip()
+        return f"\n{prompt}\n" if prompt else ""
 
     @staticmethod
     def _build_time_user_message(timestamp: datetime) -> str:
@@ -1043,7 +994,7 @@ class MaisakaChatLoopService:
         items: List[ContextItem] = []
         system_item = ContextItemBuilder().set_role(RoleType.System)
         uses_builtin_system_prompt = system_prompt is None and self._custom_chat_system_prompt is None
-        if uses_builtin_system_prompt and self._get_chat_prompt_name() in {"maisaka_chat", "maisaka_chat_passive"}:
+        if uses_builtin_system_prompt and self._get_chat_prompt_name() == "maisaka_chat":
             # 普通聊天模板自己写明了名字：昵称说明跟在名字之后，且只说明与名字不同的昵称
             bot_nickname_notice = self._build_bot_nickname_notice(selected_history, skip_same_as_bot_name=True)
             resolved_system_prompt = self._build_chat_system_prompt(bot_nickname_notice=bot_nickname_notice)
@@ -1201,6 +1152,13 @@ class MaisakaChatLoopService:
             ),
             system_prompt=system_prompt,
         )
+        if global_config.agent_core.enabled:
+            state = get_agent_state(self._agent_scope_id())
+            built_messages = apply_request_policy(
+                built_messages,
+                LifecycleTracker(state.context_sidecar),
+                state.event_seq,
+            )
         if enable_visual_message:
             built_messages = limit_latest_images_in_messages(
                 built_messages,

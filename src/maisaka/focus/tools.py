@@ -246,7 +246,7 @@ class FocusToolRouter:
             return failure(f"工具参数声明已经变化：{exc.message}")
         invocation.arguments = native_arguments
         invocation.metadata["focus_scope_id"] = self.group.scope_id
-        if tool_name in {"wait", "stop"} and original.provider_name == "maisaka_builtin":
+        if tool_name in {"sleep"} and original.provider_name == "maisaka_builtin":
             result = self.group.execute_control(tool_name, native_arguments, session_id)
         else:
             native = ToolInvocation(

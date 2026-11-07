@@ -1,8 +1,3 @@
-[text_learning_expression]
-display_name = "Expressions from passages"
-advanced = true
-description = "Extracts expressions grounded in pasted passages for the user to select and import."
-
 [text_learning_jargon]
 display_name = "Jargon from passages"
 advanced = true
@@ -13,11 +8,6 @@ display_name = "Long-term Memory Chat Summary"
 advanced = false
 description = "Extracts incremental information and important knowledge from the current chat window for long-term memory."
 
-[maisaka_chat_passive]
-display_name = "Planner (Passive replyer)"
-advanced = true
-description = "Used when experimental passive replyer is enabled; final planner text guides a reply, while tool calls perform actions."
-
 [maisaka_chat]
 display_name = "Planner"
 advanced = false
@@ -27,41 +17,6 @@ description = "Main Maisaka planning template that combines identity, time, tool
 display_name = "Planner (Timing merged)"
 advanced = false
 description = "Main Maisaka planning template used when independent timing awareness is disabled, with timing decisions merged into the planner."
-
-[maisaka_replyer]
-display_name = "Replyer"
-advanced = false
-description = "Maisaka reply generation template that creates the final reply from persona, expression style, chat notes, and reply context."
-
-[reply_attachments]
-display_name = "Reply attachments"
-advanced = true
-description = "Explains that the system sends reply images, mentions and emojis, preventing attachment information from being repeated in the reply text."
-
-[retro_replyer]
-display_name = "Retro reply"
-advanced = true
-description = "Group chat reply template for retro mode (experimental.replyer_retro_prompt). Persona and chat guidelines are sent in the first system message; the remaining template is sent as a user message."
-
-[retro_replyer_light]
-display_name = "Retro reply (short)"
-advanced = true
-description = "Short group chat reply template for retro mode, matching the legacy light reply used when think_level=0."
-
-[retro_private_replyer]
-display_name = "Retro private reply"
-advanced = true
-description = "Private chat reply template for retro mode, organizing all reply instructions the legacy way."
-
-[retro_private_replyer_self]
-display_name = "Retro private follow-up reply"
-advanced = true
-description = "Private chat follow-up template for retro mode, used to keep adding to a message Mai just sent."
-
-[default_expressor]
-display_name = "Default Expressor"
-advanced = true
-description = "Template for expression generation and cleanup, usually only edited while debugging the expression system."
 
 [emoji_content_analysis]
 display_name = "Emoji Content Analysis"
@@ -82,16 +37,6 @@ description = "Template for selecting or replacing emojis or stickers based on t
 display_name = "Emoji Selection"
 advanced = true
 description = "Template for choosing the most suitable emoji or sticker from a grid according to context and tone."
-
-[expression_evaluation]
-display_name = "Expression Evaluation"
-advanced = true
-description = "Template for evaluating the quality of candidate expressions."
-
-[expression_select]
-display_name = "Expression Selection"
-advanced = true
-description = "Template for selecting a suitable expression from the expression library."
 
 [image_description]
 display_name = "Image Description"
@@ -122,11 +67,6 @@ description = "Template for inferring jargon meaning from content only."
 display_name = "Jargon Context Inference"
 advanced = true
 description = "Template for inferring jargon meaning with surrounding context."
-
-[learn_style]
-display_name = "Style Learning"
-advanced = true
-description = "Template for learning expression style from chat content."
 
 [learn_jargon]
 display_name = "Jargon Learning"
@@ -222,3 +162,13 @@ description = "External planner recovery。"
 display_name = "External planner continuation"
 advanced = true
 description = "External planner continuation。"
+
+[agent_core]
+display_name = "Agent Core"
+advanced = false
+description = "Main template after the agent rewrite: persona and style are merged, and the model decides what to look up, what to say, and when to sleep."
+
+[maisaka_wait_reminder]
+display_name = "Wait reminder"
+advanced = true
+description = "Reminds the model to reconsider its options after repeated waits."

@@ -23,7 +23,6 @@ def _get_builtin_hook_spec_registrars() -> List[HookSpecRegistrar]:
     from src.chat.message_receive.bot import register_chat_hook_specs
     from src.desktop_pet.hooks import register_desktop_pet_hook_specs
     from src.emoji_system.emoji_manager import register_emoji_hook_specs
-    from src.learners.expression_learner import register_expression_hook_specs
     from src.learners.jargon_miner import register_jargon_hook_specs
     from src.maisaka.chat_loop_service import register_maisaka_hook_specs
     from src.services.send_service import register_send_service_hook_specs
@@ -33,7 +32,6 @@ def _get_builtin_hook_spec_registrars() -> List[HookSpecRegistrar]:
         register_desktop_pet_hook_specs,
         register_emoji_hook_specs,
         register_jargon_hook_specs,
-        register_expression_hook_specs,
         register_send_service_hook_specs,
         register_maisaka_hook_specs,
     ]

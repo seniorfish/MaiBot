@@ -37,7 +37,9 @@ class MetadataIdentityMixin:
                     (canonical_name,),
                 ).fetchone()
                 if collision is not None:
-                    canonical_name = f"{canonical_name} [{person_id}]"
+                    # Short suffix: the full person id is unreadable inside
+                    # profiles and relations, eight hex chars are unique enough.
+                    canonical_name = f"{canonical_name} [{person_id[:8]}]"
                 conn.execute(
                     "INSERT INTO person_identities VALUES (?, ?, ?, ?, ?, ?)",
                     (person_id, platform, user_id, canonical_name, now, now),

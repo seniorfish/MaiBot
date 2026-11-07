@@ -1,1 +1,1 @@
-You have waited several times in a row. To avoid an endless conversation loop, consider extending the wait duration or calling stop to end the conversation.
+You have idled several times in a row. If those events truly do not need a reply, just keep sleeping; there is no need to speak or call tools to look busy. If something does need follow-up (someone is waiting on you, you need to look something up, or you promised something), go do it.

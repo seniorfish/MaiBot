@@ -1088,19 +1088,6 @@ class ExperimentalConfig(ConfigBase):
     __ui_advanced__ = True
     __ui_order__ = 140
 
-    passive_replyer: bool = Field(
-        default=False,
-        json_schema_extra={
-            "label": {
-                "zh_CN": "被动式 replyer",
-                "en_US": "Passive replyer",
-                "ja_JP": "受動型 replyer",
-            },
-            "x-widget": "switch",
-        },
-    )
-    """仅作用于普通聊天模式：Planner 不调用工具而输出正文时，将正文作为自然语言指导启动一次回复；篇幅、表达偏好和插件相关需求直接写入指导，引用与附件由并行回复补充器编排。关闭时使用原有 reply 工具。切换从下一轮思考生效，Focus 不受影响。"""
-
     group_attention_drift: GroupAttentionDriftConfig = Field(
         default_factory=GroupAttentionDriftConfig,
         json_schema_extra={
@@ -4072,153 +4059,10 @@ class LearningBlacklistUser(ConfigBase):
     user_id: str = Field(min_length=1, pattern=r"^\S+$", json_schema_extra={"label": "用户 ID"})
 
 
-class ExpressionConfig(ConfigBase):
-    """表达配置类"""
-
-    __ui_label__ = "学习"
-    __ui_order__ = 40
-    __ui_use_subtabs__ = True
-    __ui_sub_label__ = "表达"
-
-    expression_checked_only: bool = Field(
-        default=False,
-        json_schema_extra={
-            "label": {
-                "zh_CN": "仅使用精选表达",
-                "en_US": "Use only curated expressions",
-                "ja_JP": "厳選した表現のみを使用",
-            },
-            "x-widget": "switch",
-            "x-row": "expression-learning-switches",
-        },
-    )
-    """仅使用人工精选的表达。"""
-
-    expression_self_reflect: bool = Field(
-        default=True,
-        json_schema_extra={
-            "label": {
-                "zh_CN": "优化表达方式学习",
-                "en_US": "Optimize expression learning",
-                "ja_JP": "表現学習を最適化",
-            },
-            "x-widget": "switch",
-            "x-row": "expression-learning-switches",
-        },
-    )
-    """写入表达方式前先让 AI 检查，减少学到奇怪内容。"""
-
-    use_vector_expression: bool = Field(
-        default=False,
-        json_schema_extra={
-            "label": {
-                "zh_CN": "表达选择",
-                "en_US": "Expression selection",
-                "ja_JP": "表現の選択",
-            },
-            "x-widget": "discrete-slider",
-            "options": ["false", "true"],
-            "x-option-labels": {"false": "快速", "true": "精细"},
-            "x-option-descriptions": {
-                "false": "默认档位。加权随机抽取表达，直接供回复参考，不额外调用选择模型。",
-                "true": "使用向量召回，再由 LLM 按语境筛选，需要配置嵌入模型。",
-            },
-            "advanced": False,
-        },
-    )
-    """表达选择档位：false 为快速，加权随机抽样后直接注入，不额外调用选择 LLM；true 为精细，使用表达意图与嵌入召回，再由 LLM 筛选，需要配置嵌入模型。复古回复不使用表达选择。"""
-
-    expression_vector_index_path: str = Field(
-        default="data/expression_selection/expression_vector_index.json",
-        json_schema_extra={
-            "label": {
-                "zh_CN": "表达向量索引路径",
-                "en_US": "Expression vector index path",
-                "ja_JP": "表現ベクトル索引パス",
-            },
-            "x-widget": "input",
-            "advanced": True,
-        },
-    )
-    """向量召回使用的表达索引 JSON；相对路径按项目根目录解析。"""
-
-    expression_vector_candidate_pool_size: int = Field(
-        default=50,
-        ge=1,
-        le=50,
-        json_schema_extra={
-            "label": {
-                "zh_CN": "向量候选上限",
-                "en_US": "Vector candidate limit",
-                "ja_JP": "ベクトル候補上限",
-            },
-            "x-widget": "input",
-            "advanced": True,
-        },
-    )
-    """向量召回后最多交给表达方式 LLM 选择的候选数；硬上限为 50。"""
-
-    max_expression_learner: int = Field(
-        default=3,
-        json_schema_extra={
-            "label": {
-                "zh_CN": "表达学习最大并发",
-                "en_US": "Max expression learners",
-                "ja_JP": "表現学習の最大同時実行数",
-            },
-            "x-widget": "input",
-            "advanced": True,
-        },
-    )
-    """同时运行的表达学习任务数量；太高可能占用更多资源。"""
-
-    learning_list: list[LearningItem] = Field(
-        default_factory=lambda: [
-            LearningItem(
-                platform="",
-                item_id="",
-                type="group",
-                use=True,
-                learn=True,
-            )
-        ],
-        json_schema_extra={
-            "label": {
-                "zh_CN": "学习配置",
-                "en_US": "Learning settings",
-                "ja_JP": "学習設定",
-            },
-            "x-widget": "custom",
-        },
-    )
-    """配置哪些聊天会学习和使用表达方式；默认规则不够时再单独添加。"""
-
-    expression_groups: list[ChatStreamGroup] = Field(
-        default_factory=list,
-        json_schema_extra={
-            "label": {
-                "zh_CN": "共享共享组",
-                "en_US": "Expression sharing groups",
-                "ja_JP": "表現共有グループ",
-            },
-            "x-widget": "custom",
-        },
-    )
-    """_wrap_让多个群聊或私聊共享学到的表达方式。"""
-
-    learning_blacklist: List[LearningBlacklistUser] = Field(
-        default_factory=list,
-        json_schema_extra={"label": "学习黑名单", "x-widget": "custom"},
-    )
-    """不学习来源指向这些用户消息的表达；按平台和用户 ID 精确匹配，仍保留聊天上下文。"""
-
-
 class JargonConfig(ConfigBase):
     """黑话配置类"""
 
-    __ui_parent__ = "expression"
     __ui_label__ = "黑话"
-    __ui_sub_label__ = "黑话"
 
     learning_list: list[LearningItem] = Field(
         default_factory=lambda: [
@@ -4339,9 +4183,7 @@ class EmojiCacheCleanupConfig(ConfigBase):
 class EmojiConfig(ConfigBase):
     """表情包配置类"""
 
-    __ui_parent__ = "expression"
     __ui_label__ = "表情包"
-    __ui_sub_label__ = "表情包"
 
     use_new_send_logic: bool = Field(
         default=False,
@@ -6213,3 +6055,124 @@ class PluginRuntimeConfig(ConfigBase):
         },
     )
     """插件需要网页截图或渲染时使用的浏览器配置。"""
+
+
+class AgentCoreToolsConfig(ConfigBase):
+    """Agent 核心工具权限配置"""
+
+    allow_destructive: bool = Field(
+        default=False,
+        json_schema_extra={
+            "label": {
+                "zh_CN": "允许破坏性工具",
+                "en_US": "Allow destructive tools",
+                "ja_JP": "破壊的なツールを許可",
+            },
+            "x-widget": "switch",
+        },
+    )
+    """允许模型调用踢人、禁言、撤回、改群名片等不可逆操作；默认关闭，开启后仍写审计记录。"""
+
+    allow_onebot_api: bool = Field(
+        default=False,
+        json_schema_extra={
+            "label": {
+                "zh_CN": "允许通用 OneBot API",
+                "en_US": "Allow raw OneBot API",
+                "ja_JP": "汎用 OneBot API を許可",
+            },
+            "x-widget": "switch",
+        },
+    )
+    """开放 onebot_api(action, params) 逃生口；仅在已包装工具无法覆盖时使用。"""
+
+    max_messages_per_turn: int = Field(
+        default=3,
+        ge=1,
+        le=20,
+        json_schema_extra={
+            "label": {
+                "zh_CN": "单轮最多发送条数",
+                "en_US": "Max messages per turn",
+                "ja_JP": "1 ターン最大送信数",
+            },
+            "x-widget": "number",
+        },
+    )
+    """一次 send_messages 调用允许发送的最大消息条数，超出部分由风控拒绝。"""
+
+    rate_limit_per_minute: int = Field(
+        default=20,
+        ge=0,
+        le=600,
+        json_schema_extra={
+            "label": {
+                "zh_CN": "每会话每分钟发送上限",
+                "en_US": "Max messages per minute per session",
+                "ja_JP": "セッションあたり 1 分間の最大送信数",
+            },
+            "x-widget": "number",
+        },
+    )
+    """同一会话最近 60 秒内允许发送的消息条数，超出时整次调用失败且一条都不发；0 表示不限。"""
+
+    duplicate_suppress_seconds: int = Field(
+        default=60,
+        ge=0,
+        le=3600,
+        json_schema_extra={
+            "label": {
+                "zh_CN": "重复内容抑制秒数",
+                "en_US": "Duplicate suppression seconds",
+                "ja_JP": "重複内容の抑制秒数",
+            },
+            "x-widget": "number",
+        },
+    )
+    """同一会话内完全相同文本在该秒数内再次出现即视为刷屏并拒绝整次调用；0 表示不启用。"""
+
+
+class AgentCoreConfig(ConfigBase):
+    """Agent 核心运行配置（事件驱动循环）"""
+
+    __ui_label__ = "Agent 核心"
+    __ui_advanced__ = True
+    __ui_order__ = 150
+
+    enabled: bool = Field(
+        default=False,
+        json_schema_extra={
+            "label": {
+                "zh_CN": "启用事件驱动核心",
+                "en_US": "Enable event-driven core",
+                "ja_JP": "イベント駆動コアを有効化",
+            },
+            "x-widget": "switch",
+        },
+    )
+    """启用后由统一事件队列与 AgentLoop 驱动，普通会话与 Focus 共用同一循环；关闭时回退现有 Planner 循环。"""
+
+    profile_injection: bool = Field(
+        default=True,
+        json_schema_extra={
+            "label": {
+                "zh_CN": "画像按需注入",
+                "en_US": "Inject profiles on demand",
+                "ja_JP": "プロフィールを必要時に注入",
+            },
+            "x-widget": "switch",
+        },
+    )
+    """启动时注入最近活跃用户画像，运行中遇到未载入的用户再追加补充消息。"""
+
+    tools: AgentCoreToolsConfig = Field(
+        default_factory=AgentCoreToolsConfig,
+        json_schema_extra={
+            "label": {
+                "zh_CN": "工具权限",
+                "en_US": "Tool permissions",
+                "ja_JP": "ツール権限",
+            },
+        },
+    )
+    """Agent 核心的工具权限与发送风控。"""

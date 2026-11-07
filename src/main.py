@@ -150,13 +150,8 @@ class MainSystem:
             from src.A_memorix.host_service import a_memorix_host_service
         with diagnostic_stage("startup.import_mcp"):
             from src.mcp_module.service import get_mcp_service
-        with diagnostic_stage("startup.import_expression_vector"):
-            from src.services.expression_vector_service import expression_vector_service
-
         a_memorix_host_service.register_config_reload_callback()
         get_mcp_service().register_config_reload_callback()
-        with diagnostic_stage("startup.expression_vector_schedule"):
-            expression_vector_service.start()
         a_memorix_task = asyncio.create_task(a_memorix_host_service.start(), name="a_memorix_start")
 
         with diagnostic_stage("startup.first_background_dispatch"):
@@ -324,12 +319,10 @@ async def main() -> None:
         from src.emoji_system.emoji_manager import emoji_manager
         from src.mcp_module.service import get_mcp_service
         from src.plugin_runtime.integration import get_plugin_runtime_manager
-        from src.services.expression_vector_service import expression_vector_service
         from src.services.memory_flow_service import memory_automation_service
 
         emoji_manager.shutdown()
         await image_manager.shutdown()
-        await expression_vector_service.stop()
         await memory_automation_service.shutdown()
         await a_memorix_host_service.stop()
         await get_plugin_runtime_manager().bridge_event("on_stop")

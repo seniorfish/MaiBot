@@ -17,8 +17,6 @@ _REQUEST_PANEL_STYLE_MAP: dict[str, tuple[str, str]] = {
     "planner": ("MaiSaka 大模型请求 - 对话单步", "green"),
     "replyer": ("MaiSaka 回复器 Prompt", "bright_yellow"),
     "emotion": ("MaiSaka Emotion Tool Prompt", "bright_cyan"),
-    "expression_selector": ("MaiSaka 表达选择子代理 Prompt", "bright_yellow"),
-    "expression_learner": ("MaiSaka 表达学习上下文", "bright_green"),
     "jargon_learner": ("MaiSaka 黑话学习上下文", "bright_cyan"),
     "jargon_learning_update": ("MaiSaka 黑话含义推断 Prompt", "bright_cyan"),
     "context_compaction": ("MaiSaka 上下文压缩 Prompt", "bright_magenta"),

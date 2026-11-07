@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 
 
 logger = get_logger("jargon_learner")
+MAX_CONCURRENT_LEARNING_BATCHES = 3
 
 jargon_learn_model = LLMServiceClient(task_name="learner", request_type="jargon.learner")
 MESSAGE_OPEN_TAG_PATTERN = re.compile(r"^<message\b(?P<attrs>[^>]*)>", re.IGNORECASE | re.DOTALL)
@@ -73,9 +74,7 @@ class JargonLearningBatchGate:
         self._active_session_ids: set[str] = set()
 
     async def acquire(self, session_id: str) -> JargonLearningAcquireResult:
-        max_count = int(global_config.expression.max_expression_learner)
-        if max_count <= 0:
-            return JargonLearningAcquireResult(False, "max_expression_learner <= 0", 0, max_count)
+        max_count = MAX_CONCURRENT_LEARNING_BATCHES
 
         async with self._lock:
             active_count = len(self._active_session_ids)
@@ -217,23 +216,17 @@ class JargonLearner:
             reasons = {
                 "session_busy": "当前会话已有学习批次正在运行",
                 "global_limit": f"全局学习并发已满（{acquire_result.active_count}/{acquire_result.max_count}）",
-                "max_expression_learner <= 0": "学习并发配置小于或等于 0",
             }
-            self.learning_retry_blocked = acquire_result.max_count <= 0
+            self.learning_retry_blocked = False
             self.learning_status = "skipped" if self.learning_retry_blocked else "waiting"
             self.learning_detail = reasons[acquire_result.reason] + f"，已保留 {len(self.pending_messages)} 条素材等待重试"
             if acquire_result.reason == "session_busy":
                 logger.info(f"{learning_session_id} 已有黑话学习批次正在运行，放弃新的批次")
-            elif acquire_result.reason == "global_limit":
+            else:
                 logger.info(
                     f"黑话学习全局并发已满，放弃新的批次: "
                     f"active={acquire_result.active_count}, max={acquire_result.max_count}, "
                     f"session_id={learning_session_id}"
-                )
-            else:
-                logger.warning(
-                    f"黑话学习并发配置无效，放弃新的批次: "
-                    f"max_expression_learner={acquire_result.max_count}, session_id={learning_session_id}"
                 )
             return False
 

@@ -47,6 +47,9 @@ from src.maisaka.visual.emoji_image_cache import emoji_image_cache
 from src.maisaka.visual.deferred_images import append_context_image
 
 FORWARD_PREVIEW_LIMIT = 4
+# 机器人自己发出去的消息来源；这些消息必须以 assistant 角色回放，
+# 否则模型会把自己说过的话误认成用户说的。
+SELF_MESSAGE_SOURCE_KINDS = frozenset({"guided_reply", "outbound_send"})
 IMAGE_QUALITY_MAX_SIDE: Dict[str, int] = {"normal": 512, "high": 1024}
 # 图片转码和缩图结果缓存条数；规划器每轮都会重建上下文，缓存可避免同一张图片被反复解码转码。
 TRANSCODED_IMAGE_CACHE_SIZE = 16
@@ -576,6 +579,12 @@ class ContentContextMessage(LLMContextMessage):
     context_item_id: str = field(default_factory=lambda: uuid.uuid4().hex)
 
     @property
+    def is_self_message(self) -> bool:
+        """机器人自己发出去的消息，必须按 assistant 角色回放。"""
+
+        return self.source_kind in SELF_MESSAGE_SOURCE_KINDS
+
+    @property
     def media_sequence(self) -> MessageSequence:
         """提供需要识别或刷新的原始媒体组件。"""
         return self.raw_message
@@ -590,6 +599,8 @@ class ContentContextMessage(LLMContextMessage):
 
     @property
     def role(self) -> str:
+        if self.is_self_message:
+            return RoleType.Assistant.value
         return RoleType.User.value
 
     @property
@@ -604,11 +615,14 @@ class ContentContextMessage(LLMContextMessage):
         self, enable_visual_message: bool = True, *, limit_emoji_size: bool = False,
         max_image_side: Optional[int] = None,
     ) -> ContextItem | None:
+        # 自己发过的消息按 assistant 回放，否则模型会把自己说过的话当成用户说的。
+        # 图片和表情包只能出现在 user 消息里，因此这些媒体降级成文字占位。
+        is_self = self.is_self_message
         return _build_item_from_sequence(
-            RoleType.User,
+            RoleType.Assistant if is_self else RoleType.User,
             self.raw_message,
             self.processed_plain_text,
-            enable_visual_message=enable_visual_message,
+            enable_visual_message=False if is_self else enable_visual_message,
             limit_emoji_size=limit_emoji_size,
             max_image_side=max_image_side,
             meta=ContextItemMeta.create(item_id=self.context_item_id, timestamp=self.timestamp),

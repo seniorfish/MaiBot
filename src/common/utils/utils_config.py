@@ -9,44 +9,6 @@ from src.config.official_configs import PrivateReplyPauseRule
 logger = get_logger("config_utils")
 
 
-class ExpressionConfigUtils:
-    @staticmethod
-    def _find_expression_config_item(session_id: Optional[str] = None):
-        return ChatConfigUtils.find_learning_config_item(global_config.expression.learning_list, session_id)
-
-    @staticmethod
-    def get_expression_config_for_chat(session_id: Optional[str] = None) -> tuple[bool, bool]:
-        # sourcery skip: use-next
-        """
-        根据聊天会话 ID 获取表达配置。
-
-        Args:
-            session_id: 聊天会话 ID，格式为哈希值
-
-        Returns:
-            tuple: (是否使用表达, 是否学习表达)
-        """
-        config_item = ExpressionConfigUtils._find_expression_config_item(session_id)
-        if config_item is None:
-            return True, True
-
-        return (
-            config_item.use,
-            config_item.learn,
-        )
-
-    @staticmethod
-    def _get_stream_id(platform: str, id_str: str, is_group: bool = False) -> Optional[str]:
-        """
-        根据平台、ID 字符串和是否为群聊解析已存在的聊天流 ID。
-
-        注意：业务模块不应自行计算 session_id，这里只返回已存在的真实聊天流。
-        """
-        chat_type = "group" if is_group else "private"
-        session_ids = ChatConfigUtils.resolve_existing_session_ids(platform, id_str, chat_type)
-        return next(iter(session_ids), None)
-
-
 class JargonConfigUtils:
     @staticmethod
     def get_target_session_ids_with_wildcards(target_item) -> set[str]:

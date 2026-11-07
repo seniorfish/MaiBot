@@ -20,4 +20,4 @@
 #     timing: Optional[Dict[str, Any]] = None
 #     processed_output: Optional[List[str]] = None
 #     timing_logs: Optional[List[str]] = None
-# 已重构，见src/common/data_models/reply_generation_data_models.py
+# 已废弃：回复生成数据模型已随 Replyer 移除。

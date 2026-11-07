@@ -10,22 +10,28 @@ from src.core.tooling import ToolAvailabilityContext, ToolExecutionContext, Tool
 from src.llm_models.payload_content.tool_option import ToolDefinitionInput
 
 from .context import BuiltinToolRuntimeContext
-from .query_memory import get_tool_spec as get_query_memory_tool_spec
-from .query_memory import handle_tool as handle_query_memory_tool
+from .query_chat_history import get_tool_spec as get_query_chat_history_tool_spec
+from .query_chat_history import handle_tool as handle_query_chat_history_tool
 from .query_image_memory import get_tool_spec as get_query_image_memory_tool_spec
 from .query_image_memory import handle_tool as handle_query_image_memory_tool
+from .query_memory import get_tool_spec as get_query_memory_tool_spec
+from .query_memory import handle_tool as handle_query_memory_tool
 from .query_person_profile import get_tool_spec as get_query_person_profile_tool_spec
 from .query_person_profile import handle_tool as handle_query_person_profile_tool
+from .read_emoji import get_tool_spec as get_read_emoji_tool_spec
+from .read_emoji import handle_tool as handle_read_emoji_tool
+from .read_image import get_tool_spec as get_read_image_tool_spec
+from .read_image import handle_tool as handle_read_image_tool
 from .read_tool_result import get_tool_spec as get_read_tool_result_tool_spec
 from .read_tool_result import handle_tool as handle_read_tool_result_tool
-from .reply import get_tool_spec as get_reply_tool_spec
-from .reply import handle_tool as handle_reply_tool
 from .send_emoji import get_tool_spec as get_send_emoji_tool_spec
 from .send_emoji import handle_tool as handle_send_emoji_tool
+from .send_messages import get_tool_spec as get_send_messages_tool_spec
+from .send_messages import handle_tool as handle_send_messages_tool
 from .show_emoji_list import get_tool_spec as get_show_emoji_list_tool_spec
 from .show_emoji_list import handle_tool as handle_show_emoji_list_tool
-from .stop import get_tool_spec as get_stop_tool_spec
-from .stop import handle_tool as handle_stop_tool
+from .sleep import get_tool_spec as get_sleep_tool_spec
+from .sleep import handle_tool as handle_sleep_tool
 from .subagent import get_status_tool_spec as get_subagent_status_tool_spec
 from .subagent import get_stop_tool_spec as get_subagent_stop_tool_spec
 from .subagent import get_tool_spec as get_subagent_tool_spec
@@ -36,8 +42,6 @@ from .tool_search import get_tool_spec as get_tool_search_tool_spec
 from .tool_search import handle_tool as handle_tool_search_tool
 from .view_forward_message import get_tool_spec as get_view_forward_message_tool_spec
 from .view_forward_message import handle_tool as handle_view_forward_message_tool
-from .wait import get_tool_spec as get_wait_tool_spec
-from .wait import handle_tool as handle_wait_tool
 
 BuiltinToolHandler = Callable[[ToolInvocation, Optional[ToolExecutionContext]], Awaitable[ToolExecutionResult]]
 BuiltinToolRawHandler = Callable[
@@ -63,7 +67,7 @@ class BuiltinToolEntry:
     def build_spec(self, context: Optional[ToolAvailabilityContext] = None) -> ToolSpec:
         """生成带统一可见性元数据的工具声明。"""
 
-        tool_spec = deepcopy(get_reply_tool_spec(context) if self.name == "reply" else self.get_spec())
+        tool_spec = deepcopy(self.get_spec())
         tool_spec.metadata["builtin_stage"] = self.stage
         tool_spec.metadata["visibility"] = self.visibility
         return tool_spec
@@ -88,9 +92,8 @@ def _get_query_image_memory_tool_spec() -> ToolSpec:
 
 
 BUILTIN_TOOL_ENTRIES: List[BuiltinToolEntry] = [
-    BuiltinToolEntry("wait", get_wait_tool_spec, handle_wait_tool, stage="both"),
-    BuiltinToolEntry("stop", get_stop_tool_spec, handle_stop_tool, stage="action"),
-    BuiltinToolEntry("reply", get_reply_tool_spec, handle_reply_tool, stage="action"),
+    BuiltinToolEntry("sleep", get_sleep_tool_spec, handle_sleep_tool, stage="both"),
+    BuiltinToolEntry("send_messages", get_send_messages_tool_spec, handle_send_messages_tool, stage="action"),
     BuiltinToolEntry(
         "view_forward_message",
         get_view_forward_message_tool_spec,
@@ -99,6 +102,12 @@ BUILTIN_TOOL_ENTRIES: List[BuiltinToolEntry] = [
         visibility="deferred",
     ),
     BuiltinToolEntry("query_memory", _get_query_memory_tool_spec, handle_query_memory_tool, stage="action"),
+    BuiltinToolEntry(
+        "query_chat_history",
+        get_query_chat_history_tool_spec,
+        handle_query_chat_history_tool,
+        stage="action",
+    ),
     BuiltinToolEntry(
         "query_image_memory",
         _get_query_image_memory_tool_spec,
@@ -112,6 +121,8 @@ BUILTIN_TOOL_ENTRIES: List[BuiltinToolEntry] = [
         stage="action",
     ),
     BuiltinToolEntry("send_emoji", get_send_emoji_tool_spec, handle_send_emoji_tool, stage="action"),
+    BuiltinToolEntry("read_image", get_read_image_tool_spec, handle_read_image_tool, stage="action"),
+    BuiltinToolEntry("read_emoji", get_read_emoji_tool_spec, handle_read_emoji_tool, stage="action"),
     BuiltinToolEntry("show_emoji_list", get_show_emoji_list_tool_spec, handle_show_emoji_list_tool, stage="action"),
     BuiltinToolEntry("tool_search", get_tool_search_tool_spec, handle_tool_search_tool, stage="action"),
     BuiltinToolEntry("subagent", get_subagent_tool_spec, handle_subagent_tool, stage="action"),

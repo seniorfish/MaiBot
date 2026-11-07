@@ -7,6 +7,9 @@ from typing import Any, Dict, Optional
 from src.core.tooling import ToolExecutionContext, ToolExecutionResult, ToolInvocation, ToolSpec
 from src.services.memory_service import memory_service
 
+from src.maisaka.agent_core.user_alias import get_user_alias_book
+from src.maisaka.memory.person_profile import rewrite_profile_names
+
 from .context import BuiltinToolRuntimeContext
 
 DEFAULT_PROFILE_LIMIT = 8
@@ -17,17 +20,21 @@ def get_tool_spec(*, enabled: bool = True) -> ToolSpec:
 
     return ToolSpec(
         name="query_person_profile",
-        description="查询人物画像。当需要查询与某人的关系时使用。",
+        description=(
+            "查询人物画像。当需要查询与某人的关系时使用。"
+            "person_name 可以填消息头里的 uid、昵称、群名片或 QQ 号；"
+            "person_id 也可以直接填 uid。"
+        ),
         parameters_schema={
             "type": "object",
             "properties": {
                 "person_id": {
                     "type": "string",
-                    "description": "内部人物ID；明确给出时填。",
+                    "description": "内部人物ID，或消息头里的 uid；明确给出时填。",
                 },
                 "person_name": {
                     "type": "string",
-                    "description": "名称/昵称/关键词；通常填这个。",
+                    "description": "名称/uid/昵称/群名片/关键词；通常填这个。",
                 },
                 "limit": {
                     "type": "integer",
@@ -103,6 +110,12 @@ async def handle_tool(
         )
 
     limit = _normalize_limit(invocation.arguments.get("limit"))
+    # Message headers only carry a short uid; expand it before hitting memory.
+    alias_book = get_user_alias_book()
+    if person_id and len(person_id) < 32:
+        person_id = alias_book.resolve_person_id(person_id) or person_id
+    elif not person_id and person_name:
+        person_id = alias_book.resolve_person_id(person_name)
     try:
         if person_id:
             payload = await memory_service.profile_admin(
@@ -143,6 +156,7 @@ async def handle_tool(
         )
 
     profile_text = structured_content["summary"]
+    profile_text = rewrite_profile_names(profile_text, structured_content["person_id"])
     if not profile_text:
         profile_text = "未找到可用的人物画像。"
     return tool_ctx.build_success_result(
