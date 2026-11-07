@@ -189,7 +189,6 @@ export interface ChatStreamDetail {
   target_id: string
   group_id: string | null
   user_id: string | null
-  expression: ChatLearningStatus
   jargon: ChatLearningStatus
   talk_frequency: ChatTalkFrequencyDetail
   private_reply: ChatPrivateReplyDetail | null
