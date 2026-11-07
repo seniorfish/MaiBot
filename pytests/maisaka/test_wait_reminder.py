@@ -6,6 +6,7 @@ from unittest.mock import Mock
 import pytest
 
 from src.common.i18n import use_locale
+from src.maisaka.agent_core.registry import reset_scope
 from src.maisaka.chat_loop_service import MaisakaChatLoopService
 from src.maisaka.focus.group_runtime import FocusGroupRuntime
 from src.maisaka.mode_policy import build_consecutive_wait_reminders
@@ -18,7 +19,7 @@ def test_reminder_starts_at_three_and_survives_further_waits(locale: str) -> Non
         assert build_consecutive_wait_reminders(2) == []
         reminders = build_consecutive_wait_reminders(3)
         assert len(reminders) == 1
-        assert "wait" in reminders[0] and "stop" in reminders[0]
+        assert "sleep" in reminders[0]
         assert build_consecutive_wait_reminders(4) == reminders
         assert build_consecutive_wait_reminders(0) == []
 
@@ -32,10 +33,20 @@ def test_normal_wait_keeps_waiting_beyond_three_and_can_reset() -> None:
     assert build_consecutive_wait_reminders(runtime._consecutive_wait_count) == []
 
 
-def test_focus_wait_keeps_waiting_beyond_three_and_stop_resets() -> None:
-    group = SimpleNamespace(_consecutive_waits=0, _pending={})
+def test_focus_sleep_keeps_waiting_beyond_three_and_stop_resets() -> None:
+    reset_scope("wait-reminder-scope")
+    group = SimpleNamespace(
+        scope_id="wait-reminder-scope",
+        _consecutive_waits=0,
+        _pending={},
+        _sleeping=False,
+        _wait_until=None,
+        _wait_session_id=None,
+        _wait_token=None,
+        _wait_started_at=None,
+    )
     for count in range(1, 6):
-        result = FocusGroupRuntime.execute_control(group, "wait", {"seconds": 60}, "chat")
+        result = FocusGroupRuntime.execute_control(group, "sleep", {}, "chat")
         assert result.success and result.metadata["pause_execution"]
         assert group._consecutive_waits == count
         assert group._wait_until is not None

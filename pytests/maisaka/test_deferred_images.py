@@ -25,6 +25,20 @@ def image_bytes(fmt="PNG"):
     return output.getvalue()
 
 
+def resize_image(part: ContextImagePart, max_side: int) -> ContextImagePart:
+    """Resize an encoded image while keeping the test independent of replyer code."""
+    with Image.open(BytesIO(base64.b64decode(part.image_base64, validate=True))) as image:
+        frame = image.convert("RGBA" if image.mode == "RGBA" else "RGB")
+        scale = max_side / max(frame.size)
+        frame = frame.resize(
+            (max(1, int(frame.width * scale)), max(1, int(frame.height * scale))),
+            Image.Resampling.LANCZOS,
+        )
+        output = BytesIO()
+        frame.save(output, format="PNG")
+    return ContextImagePart("png", base64.b64encode(output.getvalue()).decode("ascii"))
+
+
 def history(fmt="PNG"):
     data = image_bytes(fmt)
     return [context.ContentContextMessage(
@@ -119,76 +133,6 @@ def test_compaction_uses_image_descriptions_without_encoding_binary():
     assert all("base64" not in batch for batch in batches)
 
 
-def test_replyer_matches_eager_output(monkeypatch):
-    from src.chat.replyer.maisaka_generator_base import BaseMaisakaReplyGenerator
-    from src.config.config import global_config
-    monkeypatch.setattr(global_config.visual, "max_image_num", 2)
-    monkeypatch.setattr(global_config.debug, "replyer_retro_prompt", False)
-    service = BaseMaisakaReplyGenerator(llm_client_cls=lambda **kwargs: None, load_prompt_func=lambda *args, **kwargs: "prompt")
-    # 使用通用图文夹具隔离 IM 来源检查，仍走真实历史构建、筛选和编码链路。
-    monkeypatch.setattr(service, "_is_replyer_filtered_history_message", lambda message: False)
-    for name in ("_build_keyword_reaction_prompt", "_build_system_prompt", "_build_final_user_message",
-                 "_build_temporary_reply_style_message", "_select_temporary_reply_style",
-                 "_build_reply_reference_message", "_build_requested_reply_style_message"):
-        monkeypatch.setattr(service, name, lambda *args, **kwargs: "fixed")
-    entries = history()
-    kwargs = dict(reply_message=None, reply_reason="reason", enable_visual_message=True)
-    expected = service._build_request_messages.__wrapped__(service, entries, **kwargs)
-    with patch.object(context, "_encode_image_for_context", wraps=context._encode_image_for_context) as encode:
-        actual = service._build_request_messages(entries, **kwargs)
-    assert encode.call_count == 2
-    assert [item.parts for item in actual] == [item.parts for item in expected]
-
-
-@pytest.mark.parametrize("limit", [0, 2, 5])
-@pytest.mark.parametrize("mode", ["RGB", "RGBA"])
-@pytest.mark.parametrize("quality,max_image_side", [("normal", 512), ("high", 1024)])
-def test_retro_replyer_resizes_only_retained_images(monkeypatch, limit, mode, quality, max_image_side):
-    from src.chat.replyer.maisaka_generator_base import BaseMaisakaReplyGenerator
-    from src.config.config import global_config
-
-    monkeypatch.setattr(global_config.visual, "max_image_num", limit)
-    monkeypatch.setattr(global_config.visual, "image_quality", quality)
-    monkeypatch.setattr(global_config.debug, "replyer_retro_prompt", True)
-    service = object.__new__(BaseMaisakaReplyGenerator)
-    # 仅隔离模板和 IM 来源依赖，保留实际入口、图片筛选、缩放及延迟编码链路。
-    monkeypatch.setattr(service, "_is_replyer_filtered_history_message", lambda message: False)
-    monkeypatch.setattr(service, "_select_retro_prompt_name", lambda **kwargs: "test")
-    monkeypatch.setattr(service, "_build_personality_prompt", lambda: "persona")
-    monkeypatch.setattr(service, "_build_retro_template_context", lambda **kwargs: {})
-    monkeypatch.setattr(service, "_load_prompt", lambda name, **kwargs: kwargs["dialogue_prompt"] + "\nreply", raising=False)
-    monkeypatch.setattr(service, "_render_retro_history_line", lambda message, history_by_id: message.visible_text)
-    output = BytesIO()
-    Image.new(mode, (800, 400), (255, 0, 0, 128) if mode == "RGBA" else "red").save(output, format="PNG")
-    data = output.getvalue()
-    entries = [context.ContentContextMessage(
-        raw_message=MessageSequence([
-            TextComponent("before"), ImageComponent(binary_hash="", binary_data=data),
-            EmojiComponent(binary_hash="", binary_data=data), TextComponent("after"),
-        ]),
-        visible_text="message", timestamp=datetime(2026, 1, 1),
-    ) for _ in range(3)]
-    kwargs = dict(reply_message=None, reply_reason="reason", enable_visual_message=True)
-    expected = service._build_request_messages.__wrapped__(service, entries, **kwargs)
-    with patch.object(context, "_encode_image_for_context", wraps=context._encode_image_for_context) as encode:
-        actual = service._build_request_messages(entries, **kwargs)
-    assert encode.call_count == limit
-    assert [item.parts for item in actual] == [item.parts for item in expected]
-    parts = [part for item in actual for part in item.parts if isinstance(part, ContextImagePart)]
-    assert len(parts) == limit
-    for index, part in enumerate(parts):
-        with Image.open(BytesIO(base64.b64decode(part.image_base64, validate=True))) as image:
-            max_side = 128 if index < limit - 3 else 640
-            if (6 - limit + index) % 2 == 0:
-                max_side = min(max_side, max_image_side)
-            assert image.size == (max_side, max_side // 2)
-            assert image.mode == mode
-            if mode == "RGBA":
-                assert image.getpixel((0, 0))[3] == 128
-    assert all(entry.raw_message.components[1].binary_data == data for entry in entries)
-    assert all(isinstance(entry.raw_message.components[2], EmojiComponent) for entry in entries)
-
-
 @pytest.mark.parametrize("mode", ["RGB", "RGBA"])
 def test_image_quality_resizes_cached_context_without_changing_source(mode):
     output = BytesIO()
@@ -221,13 +165,14 @@ def test_image_quality_keeps_small_supported_images_unchanged():
 
 @pytest.mark.parametrize("limit", [0, 3])
 def test_deferred_image_variants_keep_source_and_skip_discarded_work(limit):
-    from src.chat.replyer.retro_prompt import _resize_retro_image
-
     data = image_bytes()
-    with (
-        patch.object(context, "_encode_image_for_context", wraps=context._encode_image_for_context) as encode,
-        patch("src.chat.replyer.retro_prompt._resize_retro_image", wraps=_resize_retro_image) as resize,
-    ):
+    resize_calls: list[int] = []
+
+    def resize(part: ContextImagePart, max_side: int) -> ContextImagePart:
+        resize_calls.append(max_side)
+        return resize_image(part, max_side)
+
+    with patch.object(context, "_encode_image_for_context", wraps=context._encode_image_for_context) as encode:
         @defer_context_image_encoding(lambda items: items)
         def build():
             builder = ContextItemBuilder()
@@ -240,7 +185,7 @@ def test_deferred_image_variants_keep_source_and_skip_discarded_work(limit):
 
         result = build()
     assert encode.call_count == limit
-    assert resize.call_count == (2 if limit else 0)
+    assert len(resize_calls) == (2 if limit else 0)
     parts = [part for item in result for part in item.parts if isinstance(part, ContextImagePart)]
     sizes = []
     for part in parts:

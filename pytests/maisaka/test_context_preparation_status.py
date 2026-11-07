@@ -20,7 +20,7 @@ async def test_context_status_tracks_parallel_injections(monkeypatch: pytest.Mon
     async def profile(**kwargs):
         started.set()
         await release_profile.wait()
-        return ["画像"]
+        return ["画像"], {"person-1"}
 
     async def image(**kwargs):
         return "图片"
@@ -31,7 +31,10 @@ async def test_context_status_tracks_parallel_injections(monkeypatch: pytest.Mon
     monkeypatch.setattr(reasoning_engine.logger, "info", logs.append)
     engine = object.__new__(reasoning_engine.MaisakaReasoningEngine)
     engine._runtime = SimpleNamespace(
-        session_id="session", log_prefix="[测试]", _update_stage_status=lambda *args, **kwargs: statuses.append(args)
+        session_id="session",
+        log_prefix="[测试]",
+        _update_stage_status=lambda *args, **kwargs: statuses.append(args),
+        _agent_scope_id=lambda: "session",
     )
 
     task = asyncio.create_task(engine._build_planner_injected_user_messages(

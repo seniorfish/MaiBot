@@ -75,7 +75,7 @@ def test_plugin_activation_records_separate_stages(monkeypatch, on_load_succeede
     runner._deactivate_plugin = AsyncMock()
     meta = SimpleNamespace(plugin_id="example.slow-plugin", config_error="", plugin_dir="unused")
     info = Mock()
-    monkeypatch.setattr(startup_diagnostics.logger, "info", info)
+    monkeypatch.setattr(startup_diagnostics.logger, "debug", info)
 
     result = asyncio.run(runner._activate_plugin(meta))
     assert result == (

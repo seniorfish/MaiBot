@@ -17,6 +17,7 @@ def _build_runtime_stub() -> MaisakaHeartFlowChatting:
     runtime._pending_wait_logical_turn_id = None
     runtime._pending_wait_started_at = None
     runtime._pending_wait_seconds = None
+    runtime._last_trigger_events = []
     runtime._wait_timeout_task = None
     runtime._proactive_trigger_message = None
     runtime._proactive_logical_turn_id = None

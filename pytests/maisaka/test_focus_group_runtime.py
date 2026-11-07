@@ -27,6 +27,8 @@ from src.llm_models.payload_content.context_item import (
     ReasoningRepresentation,
     RoleType,
 )
+from src.maisaka.agent_core import Event, EventKind
+from src.maisaka.agent_core.registry import get_agent_loop, reset_scope
 from src.maisaka.chat_loop_service import ChatResponse
 from src.maisaka.context.messages import (
     InternalContextMessage,
@@ -153,22 +155,11 @@ class RecordingProvider:
                 metadata={"visibility": "visible"},
             ),
             ToolSpec(
-                name="wait",
-                provider_name="maisaka_builtin",
-                provider_type="builtin",
-                parameters_schema={
-                    "type": "object",
-                    "properties": {"seconds": {"type": "integer"}},
-                    "required": ["seconds"],
-                },
-                metadata={"builtin_stage": "both", "visibility": "visible"},
-            ),
-            ToolSpec(
-                name="stop",
+                name="sleep",
                 provider_name="maisaka_builtin",
                 provider_type="builtin",
                 parameters_schema={"type": "object", "properties": {}},
-                metadata={"builtin_stage": "action", "visibility": "visible"},
+                metadata={"builtin_stage": "both", "visibility": "visible"},
             ),
         ]
 
@@ -214,6 +205,8 @@ class ChatServices:
         self._update_stage_status = Mock()
         self._wait_for_message_quiet_period = AsyncMock()
         self._collect_pending_messages = Mock()
+        self._is_focus_mode_active_for_current_chat = lambda: True
+        self._agent_scope_id = lambda: group.scope_id
         self._clear_forced_turn_state = Mock()
         self._trigger_trimmed_history_learning = AsyncMock()
         self._stop_background_subagents = AsyncMock()
@@ -234,6 +227,8 @@ class ChatServices:
 
 @pytest.fixture
 def setup_group(monkeypatch, tmp_path):
+    # The scope queue is process-wide, so every test starts from a clean loop.
+    reset_scope("test-group")
     group = FocusGroupRuntime("test-group")
     group._store = FocusCheckpointStore(group.scope_id, tmp_path)
     group.checkpoint = AsyncMock()
@@ -247,6 +242,29 @@ def setup_group(monkeypatch, tmp_path):
     monkeypatch.setattr(global_config.capabilities, "tool_result_condense", False)
     monkeypatch.setattr(group_module, "emit_flow_step", AsyncMock())
     return group, members, trace
+
+
+def test_switch_notice_appears_only_when_conversation_changes(setup_group):
+    from src.maisaka.context.messages import ReferenceMessage
+
+    group, _, _ = setup_group
+    group._pending["A"] = [FocusContextEntry([_history("a1")], {"A"}, 1)]
+    group._ready.add("A")
+    first = group._take_ready_inputs()
+    assert not any(isinstance(message, ReferenceMessage) for entry in first for message in entry.messages)
+
+    group._pending["B"] = [FocusContextEntry([_history("b1")], {"B"}, 2)]
+    group._ready.add("B")
+    second = group._take_ready_inputs()
+    notices = [message for entry in second for message in entry.messages if isinstance(message, ReferenceMessage)]
+    assert len(notices) == 1
+    assert notices[0].display_prefix == "[会话切换]"
+    assert "聊天 B" in notices[0].content
+
+    group._pending["B"] = [FocusContextEntry([_history("b2")], {"B"}, 3)]
+    group._ready.add("B")
+    third = group._take_ready_inputs()
+    assert not any(isinstance(message, ReferenceMessage) for entry in third for message in entry.messages)
 
 
 @pytest.mark.asyncio
@@ -321,13 +339,13 @@ async def test_permission_change_between_definition_and_execution_is_rejected(se
 
 
 @pytest.mark.asyncio
-async def test_wait_closes_tool_batch_and_cancels_later_calls(setup_group):
+async def test_sleep_closes_tool_batch_and_cancels_later_calls(setup_group):
     group, _, trace = setup_group
     await group.tools.refresh()
     response = _response(
         calls=[
             ToolCall("first", "echo", {"session_id": "A", "text": "first"}),
-            ToolCall("waiting", "wait", {"session_id": "B", "seconds": 30}),
+            ToolCall("sleeping", "sleep", {"session_id": "B"}),
             ToolCall("last", "echo", {"session_id": "B", "text": "last"}),
         ]
     )
@@ -341,10 +359,31 @@ async def test_wait_closes_tool_batch_and_cancels_later_calls(setup_group):
     assert not results[2].success
     assert group._wait_session_id == "B"
     assert group._wait_until is not None
+    assert group._sleeping is True
 
 
 @pytest.mark.asyncio
-async def test_wait_queues_normal_messages_and_background_results_until_at(setup_group):
+async def test_focus_drains_scope_events_after_waking(setup_group):
+    group, members, _ = setup_group
+    loop = get_agent_loop(group.scope_id)
+    loop.enqueue(
+        Event(kind=EventKind.MESSAGE, scope_id=group.scope_id, session_id="B", dedupe_key="mirrored")
+    )
+    called = asyncio.Event()
+
+    async def planner(*args, **kwargs):
+        called.set()
+        return _response()
+
+    group._service.chat_loop_step = planner
+    await group.register_message(members["B"], _incoming("B", "hello"), _history("你好"))
+    await asyncio.wait_for(called.wait(), 1)
+    assert loop.pending_count() == 0
+    await group.stop()
+
+
+@pytest.mark.asyncio
+async def test_sleep_wakes_on_any_new_message_and_carries_background_results(setup_group):
     group, members, _ = setup_group
     called = asyncio.Event()
 
@@ -353,15 +392,15 @@ async def test_wait_queues_normal_messages_and_background_results_until_at(setup
         return _response()
 
     group._service.chat_loop_step = planner
-    group.execute_control("wait", {"seconds": 60}, "A")
-    await group.register_message(members["B"], _incoming("B", "normal"), _history("普通消息"))
+    group.execute_control("sleep", {}, "A")
     group.register_proactive(members["B"], _incoming("B", "background"))
     await asyncio.sleep(0)
     await asyncio.sleep(0)
     assert not called.is_set()
-    await group.register_message(members["B"], _incoming("B", "at", at=True), _history("@ 消息"))
+    await group.register_message(members["B"], _incoming("B", "normal"), _history("普通消息"))
     await asyncio.wait_for(called.wait(), 1)
     assert group._wait_until is None
+    assert group._sleeping is False
     assert any("普通消息" in message.processed_plain_text for message in group.history)
     assert any("background" in message.processed_plain_text for message in group.history)
     await group.stop()
@@ -549,7 +588,13 @@ async def test_failed_compaction_continues_to_planner_in_same_turn(setup_group, 
     monkeypatch.setattr(group, "_build_references", AsyncMock(return_value=[]))
     await group._run_turn()
     planner.assert_awaited_once()
-    assert [message.processed_plain_text for message in planner.await_args.args[0]] == ["2", "3", "4", "5", "6"]
+    assert [message.processed_plain_text.rsplit("]", 1)[-1] for message in planner.await_args.args[0]] == [
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+    ]
     assert not group._failed
     assert group._considered == {"A": 6}
 
@@ -720,7 +765,7 @@ async def test_purge_removes_cleared_session_from_unloaded_checkpoints(setup_gro
         FocusContextEntry([_history("B 内容")], {"B"}),
     ]
     group._seen.update({"A\0one": None, "B\0two": None})
-    group.execute_control("wait", {"seconds": 30}, "A")
+    group.execute_control("sleep", {}, "A")
     await FocusGroupRuntime.checkpoint(group)
     FocusCheckpointStore.purge_session("A", set(), tmp_path)
     payload = group._store.load()
@@ -831,7 +876,6 @@ async def test_real_chat_services_share_one_planner_without_starting_individual_
     monkeypatch.setattr(manager_module.chat_manager, "get_session_name", lambda sid: "群 " + sid)
     monkeypatch.setattr(MaisakaHeartFlowChatting, "_emit_monitor_session_start", Mock())
     monkeypatch.setattr(MaisakaHeartFlowChatting, "_emit_monitor_message_ingested", Mock())
-    monkeypatch.setattr(MaisakaHeartFlowChatting, "_ensure_expression_vector_history_backfill_running", Mock())
     monkeypatch.setattr(MaisakaHeartFlowChatting, "_restore_recent_context_from_db", AsyncMock())
     monkeypatch.setattr(group_module, "FocusCheckpointStore", lambda scope: FocusCheckpointStore(scope, tmp_path))
     a = MaisakaHeartFlowChatting("A")
@@ -940,7 +984,7 @@ async def test_background_result_is_saved_while_entire_group_is_waiting(setup_gr
     group, members, _ = setup_group
     group._hydrating = True
     group.checkpoint = lambda: FocusGroupRuntime.checkpoint(group)
-    group.execute_control("wait", {"seconds": 60}, "A")
+    group.execute_control("sleep", {}, "A")
     group.register_proactive(members["B"], _incoming("B", "background-finished"))
     await group._checkpoint_task
     payload = group._store.load()
@@ -966,3 +1010,43 @@ async def test_focus_no_snapshot_keeps_originals_until_planner_runs(setup_group,
     await group._compact()
     assert group.entries == original
     builder.assert_not_awaited()
+
+
+def test_taking_inputs_clears_unread_events(tmp_path, monkeypatch):
+    """消息进入共享时间线后，它的事件不能再算作"未读"。
+
+    发送前的未读拦截以 AgentLoop 队列为准。Focus 的 ``_run_turn`` 内部会连跑
+    多轮并不断接入新输入；若只在每一轮最外层排空队列，中途到达的消息会一直
+    挂着未读，``send_messages`` 就会无限返回「请阅读最新的消息」——曾因此让
+    整段对话彻底失声（05:14 的「晚安」无人回复）。
+    """
+
+    from src.maisaka.agent_core.registry import get_event_queue, reset_scope
+
+    scope = "focus-drain-scope"
+    reset_scope(scope)
+    group = FocusGroupRuntime(scope)
+    group.members["sess-a"] = SimpleNamespace(
+        session_id="sess-a",
+        _collect_pending_messages=lambda: None,
+        _clear_forced_turn_state=lambda: None,
+    )
+
+    group._queue_entry("sess-a", _history("新消息"))
+    group._ready.add("sess-a")
+
+    queue = get_event_queue(scope)
+    queue.put(
+        Event(
+            kind=EventKind.MESSAGE,
+            scope_id=scope,
+            session_id="sess-a",
+            payload={"message_id": "m-1", "text": "新消息"},
+        )
+    )
+    assert queue.has_unread(scope, "sess-a")
+
+    group._take_ready_inputs()
+
+    assert not queue.has_unread(scope, "sess-a")
+    reset_scope(scope)
